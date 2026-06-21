@@ -1,8 +1,8 @@
 # docket
 
 Knowledge article approval workflow UI. Reviews agent-proposed changes to prose
-articles with word-level track-changes diffs, six-state hunk resolution, direct
-reviewer editing, and structured feedback artifacts for the agent.
+articles with word-level track-changes diffs, six-state file-change resolution,
+direct reviewer editing, and structured feedback artifacts for the agent.
 
 ## Quick start
 
@@ -24,15 +24,17 @@ Agents use `docket-propose.py` to generate and validate proposal artifacts:
 # New proposal (before/after supplied as file paths)
 python docket-propose.py new \
   --title "Add F-WIN-05: satellite focus race" \
-  --article path/to/article.md \
+  --path path/to/article.md \
   --after path/to/proposed.md \
+  --rationale "Closes gap identified in audit; aligns with F-WIN-04 invariant." \
   --tags hypothetical-fix needs-user-test
 
-# Add a hunk to an existing open proposal
-python docket-propose.py add-hunk \
+# Add a file change to an existing open proposal
+python docket-propose.py add-file \
   --proposal prop-2026-06-21-001 \
-  --article path/to/other.md \
-  --after path/to/proposed-other.md
+  --path path/to/other.md \
+  --after path/to/proposed-other.md \
+  --rationale "Supporting change required for consistency."
 
 # Validate a proposal file
 python docket-propose.py validate --proposal prop-2026-06-21-001
@@ -65,7 +67,12 @@ python docket-propose.py stamp-taxonomy
   code fences
 - **Resolution states**: approved, approved-working-draft, edited-commit-as-is,
   edited-for-agent, changes-requested, rejected
-- **Panels**: Queue | Review (Composed / Review mode / Edit ✎ tabs) | Context + Feedback
+- **Panels**: Queue | Review (file list + Composed / Review / Edit ✎ tabs) | Context + Feedback
+- **Proposal model**: each proposal is a "commit" containing one or more `file_changes`;
+  file-list pane shows all affected files with per-file status icons; bulk apply
+  convenience aliases the same resolution across all pending files
+- **Multi-select dispose**: queue items show a ready indicator (green dashed border + ✓ badge)
+  when all file changes are resolved; select multiple and dispose in one action
 - **Proposal artifacts**: `rhiz-proposals/<id>.proposal.json` in governed repos
 - **Static lint**: browser-side lint gate mirrors `rhiz-lint.py`
   (in [david-coneff/rhizome](https://github.com/david-coneff/rhizome))

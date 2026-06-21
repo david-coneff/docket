@@ -1,0 +1,29 @@
+{
+  "id": "prop-2026-06-21-001",
+  "title": "Add F-WIN-05: satellite focus race on multi-monitor",
+  "created": "2026-06-21T19:42:39.291914+00:00",
+  "status": "open",
+  "tags": [
+    "hypothetical-fix",
+    "high"
+  ],
+  "agent_notes": "Observed on a two-monitor Windows setup; hypothetical pending user test.",
+  "hunks": [
+    {
+      "id": "hunk-01",
+      "article": "rhiz-proposals/failure-paths/tauri-window-management.md",
+      "index_context": "rhiz-proposals/lessons-learned-synthesis.md",
+      "before": "# Failure Paths: Tauri Window Management\n\n## F-WIN-05 — Satellite focus race on multi-monitor\n\nThe satellite window sometimes opens behind the main window.\n",
+      "after": "# Failure Paths: Tauri Window Management\n\n## F-WIN-05 — Satellite focus race on multi-monitor\n\n**Feature scope**: `DockSystem.js` satellite creation on multi-monitor setups.\n\nThe satellite window sometimes opens behind the main window when the second\nmonitor is the active display. Calling `setFocus()` synchronously after\n`WebviewWindow` creation, before the OS has mapped the frame, is a no-op.\n\n**Fix**: await the window `tauri://created` event, then `setFocus()`.\n",
+      "status": "pending",
+      "tags": [
+        "attempted-fix",
+        "needs-user-test"
+      ],
+      "reviewer_edit": null,
+      "reviewer_edit_mode": null,
+      "reviewer_edit_notes": null,
+      "comments": []
+    }
+  ]
+}

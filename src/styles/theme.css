@@ -1,0 +1,48 @@
+/* theme.css — CSS custom properties. Theme-aware via prefers-color-scheme;
+   tag color tokens match tag-taxonomy.md. */
+
+:root {
+  --bg: #ffffff;
+  --bg-elevated: #f6f7f9;
+  --bg-sunken: #eceef1;
+  --fg: #1b1f24;
+  --fg-muted: #5b6573;
+  --border: #d6dae0;
+  --accent: #2f6feb;
+  --accent-fg: #ffffff;
+
+  --ins-bg: #e3f7e8;
+  --ins-fg: #1a7f37;
+  --del-bg: #fceaea;
+  --del-fg: #b22222;
+
+  --rhiz-tag-bug: #d1495b;
+  --rhiz-tag-hypothesis: #8338ec;
+  --rhiz-tag-prose: #2a9d8f;
+  --rhiz-tag-process: #6c757d;
+  --rhiz-tag-neutral: #94a3b8;
+
+  --radius: 6px;
+  --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  --sans: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0d1117;
+    --bg-elevated: #161b22;
+    --bg-sunken: #010409;
+    --fg: #e6edf3;
+    --fg-muted: #8b949e;
+    --border: #30363d;
+    --accent: #4493f8;
+
+    --ins-bg: #12331c;
+    --ins-fg: #3fb950;
+    --del-bg: #3a1417;
+    --del-fg: #f85149;
+  }
+}
+
+del { background: var(--del-bg); color: var(--del-fg); text-decoration: line-through; }
+ins { background: var(--ins-bg); color: var(--ins-fg); text-decoration: none; }

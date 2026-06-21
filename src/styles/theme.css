@@ -1,5 +1,5 @@
-/* theme.css — CSS custom properties. Theme-aware via prefers-color-scheme;
-   tag color tokens match tag-taxonomy.md. */
+/* theme.css — CSS custom properties (Tessel-aligned). Theme-aware via
+   prefers-color-scheme; tag color tokens match tools/tag-taxonomy.md. */
 
 :root {
   --bg: #ffffff;

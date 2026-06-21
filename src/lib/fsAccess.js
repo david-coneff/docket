@@ -1,13 +1,14 @@
 // fsAccess.js — File System Access API wrapper with a graceful fallback.
 //
-// docket §5: the user selects a working directory via the native picker
+// rhiz-review §5: the user selects a working directory via the native picker
 // (showDirectoryPicker). The handle is persisted across sessions where the
 // browser supports IndexedDB-stored handles; the *name* is always persisted in
 // localStorage so the UI can show the last-used folder. Resolved proposal JSON
 // is written back to <dir>/rhiz-proposals/<id>.resolved.json automatically.
 //
 // When the API is unavailable (non-Chromium, or file:// context), we fall back
-// to <input type=file multiple> for reading and Blob download for writing.
+// to <input type=file multiple> for reading and Blob download for writing, so
+// the app still works as the spec's "standalone HTML first" target intends.
 
 export const supportsFSAccess = typeof window !== 'undefined'
   && 'showDirectoryPicker' in window;
@@ -18,7 +19,7 @@ const PROPOSALS_SUBDIR = 'rhiz-proposals';
 export async function pickWorkingDirectory() {
   if (!supportsFSAccess) return null;
   try {
-    return await window.showDirectoryPicker({ id: 'docket-wd', mode: 'readwrite' });
+    return await window.showDirectoryPicker({ id: 'rhiz-review-wd', mode: 'readwrite' });
   } catch {
     return null; // user cancelled
   }
@@ -33,7 +34,7 @@ export async function readProposals(dirHandle) {
   const out = [];
   let pdir;
   try { pdir = await getProposalsDir(dirHandle, false); }
-  catch { return out; }
+  catch { return out; } // no rhiz-proposals/ subdir yet
   for await (const [name, handle] of pdir.entries()) {
     if (handle.kind === 'file' && name.endsWith('.proposal.json')) {
       try {
@@ -70,6 +71,7 @@ export async function writeResolved(dirHandle, proposal) {
     await w.close();
     return { method: 'fs', path: `${PROPOSALS_SUBDIR}/${filename}` };
   }
+  // Fallback: download.
   downloadBlob(json, filename, 'application/json');
   return { method: 'download', path: filename };
 }

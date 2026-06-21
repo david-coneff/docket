@@ -33,6 +33,7 @@ export function renderToolbar(store, actions) {
 
   bar.append(el('span.spacer'));
 
+  // Commit mode toggle.
   const toggle = el('div.mode-toggle');
   for (const m of ['immediate', 'batch']) {
     const b = el('button', { text: m, onclick: () => store.savePrefs({ commitMode: m }) });
@@ -41,10 +42,11 @@ export function renderToolbar(store, actions) {
   }
   bar.append(el('span', { text: 'Commit:', style: 'color:var(--fg-muted)' }), toggle);
 
+  // Batch commit button (batch mode only).
   if (store.prefs.commitMode === 'batch') {
     const proposal = store.activeProposal();
     const committable = proposal
-      ? (proposal.file_changes || []).filter((fc) => COMMITTABLE.has(fc.status)).length : 0;
+      ? (proposal.hunks || []).filter((h) => COMMITTABLE.has(h.status)).length : 0;
     bar.append(el('button.btn.primary', {
       text: `Commit batch (${committable})`,
       disabled: committable === 0,

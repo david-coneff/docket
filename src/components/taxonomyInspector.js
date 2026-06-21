@@ -1,4 +1,4 @@
-// taxonomyInspector.js — File > Tag Taxonomy modal (docket §Taxonomy Inspector).
+// taxonomyInspector.js — File > Tag Taxonomy modal (rhiz-review §Taxonomy Inspector).
 import { el } from '../lib/dom.js';
 
 const CATEGORY_LABELS = {

@@ -1,15 +1,20 @@
 // taxonomy.js — parse a tag-taxonomy.md file into a usable model.
 //
-// The taxonomy file has three parts (tag-taxonomy.md at repo root):
-//   1. YAML frontmatter (cid-short, adopted, schema-version)
+// The taxonomy file has three parts (rhiz tools/tag-taxonomy.md):
+//   1. YAML frontmatter (cid-short, adopted, schema-version) — version identity
 //   2. prose tables (human form, governing)
 //   3. a fenced ```yaml Machine Form block — the projection we load here
+//
+// We avoid a YAML dependency by parsing the known, shallow structure of the
+// Machine Form block directly. On any parse failure we fall back to an empty
+// taxonomy, and the UI treats all tags as freeform (warn-not-error).
 
 const FALLBACK = {
   cidShort: null, adopted: null, schemaVersion: null,
   categories: [], mutualExclusion: [], allTags: new Set(),
 };
 
+/** Parse the `key: value` frontmatter between the first two `---` lines. */
 function parseFrontmatter(text) {
   const m = text.match(/^---\n([\s\S]*?)\n---/);
   const fm = {};
@@ -21,11 +26,16 @@ function parseFrontmatter(text) {
   return fm;
 }
 
+/** Extract the first ```yaml fenced block body. */
 function extractMachineYaml(text) {
   const m = text.match(/```yaml\n([\s\S]*?)\n```/);
   return m ? m[1] : '';
 }
 
+/**
+ * Minimal structural parser for the taxonomy Machine Form. Tracks indentation
+ * to assemble categories, their tags, and mutual-exclusion groups.
+ */
 function parseMachine(yaml) {
   const categories = [];
   const mutualExclusion = [];
@@ -75,11 +85,17 @@ export function parseTaxonomy(text) {
   }
 }
 
+/** category id for a tag, or null if freeform. */
 export function categoryOf(taxonomy, tag) {
   for (const c of taxonomy.categories) if (c.tags.includes(tag)) return c.id;
   return null;
 }
 
+/**
+ * Given a hunk's current tag list and a candidate tag, return the tag(s) that
+ * the candidate is mutually exclusive with and already present. Used to warn
+ * (intent-hypothesis vs implementation-hypothesis).
+ */
 export function mutexConflicts(taxonomy, currentTags, candidate) {
   const conflicts = [];
   for (const group of taxonomy.mutualExclusion) {

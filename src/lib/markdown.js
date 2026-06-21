@@ -1,4 +1,8 @@
 // markdown.js — intentionally minimal Markdown→HTML for the Composed preview.
+// Covers headings, bold/italic, inline code, fenced code, links, hr, and
+// unordered lists. Not a full CommonMark implementation; the Review-mode diff
+// (not this) is the authoritative view of changes.
+
 function esc(s) {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }

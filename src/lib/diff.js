@@ -1,7 +1,7 @@
-// diff.js — mixed-granularity diff engine for docket.
+// diff.js — mixed-granularity diff engine for rhiz-review.
 //
 // Prose is diffed at word granularity; fenced code / YAML / JSON blocks are
-// diffed at line granularity (docket §UI Review mode). The same engine
+// diffed at line granularity (rhiz-review §UI Review mode). The same engine
 // powers Review mode (before→after) and "Diff my edits" (after→reviewer_edit).
 //
 // No external dependencies: a classic LCS (longest common subsequence) over a
@@ -9,6 +9,8 @@
 
 /** Tokenize prose into words and the whitespace between them (both kept). */
 export function tokenizeWords(text) {
+  // Split on whitespace boundaries but keep the whitespace as its own tokens
+  // so reconstruction is loss-less.
   return text.match(/\s+|[^\s]+/g) || [];
 }
 
@@ -25,6 +27,7 @@ export function tokenizeLines(text) {
 export function lcsDiff(a, b) {
   const n = a.length;
   const m = b.length;
+  // DP table of LCS lengths.
   const dp = Array.from({ length: n + 1 }, () => new Uint32Array(m + 1));
   for (let i = n - 1; i >= 0; i--) {
     for (let j = m - 1; j >= 0; j--) {
@@ -69,7 +72,9 @@ export function diffLines(before, after) {
 }
 
 /**
- * Segment text into alternating prose / fenced-code regions.
+ * Segment text into alternating prose / fenced-code regions. A fence is a line
+ * whose trimmed form starts with ``` (any info string). Returns an ordered
+ * array of {kind:'prose'|'code', text}.
  */
 export function segment(text) {
   const lines = text.split('\n');
@@ -83,12 +88,12 @@ export function segment(text) {
     const isFence = line.trim().startsWith('```');
     if (isFence) {
       buf.push(line);
-      if (kind === 'prose') {
+      if (kind === 'prose') { // opening fence: flush prose, switch to code
         const opening = buf.pop();
         flush();
         kind = 'code';
         buf.push(opening);
-      } else {
+      } else { // closing fence: include it, flush code, back to prose
         flush();
         kind = 'prose';
       }
@@ -101,7 +106,12 @@ export function segment(text) {
 }
 
 /**
- * Mixed-granularity diff. Prose word-level, code line-level.
+ * Mixed-granularity diff. If both sides share the same segment structure
+ * (same count and kinds), each segment is diffed at its natural granularity:
+ * prose word-level, code line-level. Otherwise the whole text is line-diffed
+ * (structural change — line granularity is the safe, readable fallback).
+ *
+ * Returns a flat op list, suitable for renderDiff().
  */
 export function diffMixed(before, after) {
   const sa = segment(before);
@@ -116,6 +126,7 @@ export function diffMixed(before, after) {
       ? diffLines(sa[k].text, sb[k].text)
       : diffWords(sa[k].text, sb[k].text);
     ops.push(...part);
+    // Re-insert the newline that split() removed between segments.
     if (k < sa.length - 1) ops.push({ type: 'equal', text: '\n' });
   }
   return coalesce(ops);

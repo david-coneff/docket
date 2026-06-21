@@ -23,7 +23,9 @@ export const store = {
   proposals: [],
   manualOrder: [],
   activeProposalId: null,
-  activeHunkIndex: 0,
+  activeFileIndex: 0,
+  selectedProposalIds: new Set(),
+  disposedProposalIds: new Set(),
   _subs: new Set(),
 
   subscribe(fn) { this._subs.add(fn); return () => this._subs.delete(fn); },
@@ -42,6 +44,10 @@ export const store = {
       ...this.manualOrder.filter((id) => ids.includes(id)),
       ...ids.filter((id) => !this.manualOrder.includes(id)),
     ];
+    for (const id of this.disposedProposalIds)
+      if (!ids.includes(id)) this.disposedProposalIds.delete(id);
+    for (const id of this.selectedProposalIds)
+      if (!ids.includes(id)) this.selectedProposalIds.delete(id);
     if (!this.activeProposalId && ids.length) this.activeProposalId = ids[0];
     this.emit();
   },
@@ -50,25 +56,33 @@ export const store = {
     return this.proposals.find((p) => p.data?.id === this.activeProposalId)?.data || null;
   },
 
-  activeHunk() {
+  activeFile() {
     const p = this.activeProposal();
-    return p ? p.hunks[this.activeHunkIndex] || null : null;
+    return p ? (p.file_changes || [])[this.activeFileIndex] || null : null;
   },
 
-  setActive(proposalId, hunkIndex = 0) {
+  setActive(proposalId, fileIndex = 0) {
     this.activeProposalId = proposalId;
-    this.activeHunkIndex = hunkIndex;
+    this.activeFileIndex = fileIndex;
     this.emit();
   },
 
-  setHunkIndex(i) { this.activeHunkIndex = i; this.emit(); },
+  setFileIndex(i) { this.activeFileIndex = i; this.emit(); },
 
-  updateActiveHunk(patch) {
-    const h = this.activeHunk();
-    if (!h) return;
-    Object.assign(h, patch);
+  updateActiveFile(patch) {
+    const fc = this.activeFile();
+    if (!fc) return;
+    Object.assign(fc, patch);
     this.emit();
   },
+
+  toggleProposalSelect(id) {
+    if (this.selectedProposalIds.has(id)) this.selectedProposalIds.delete(id);
+    else this.selectedProposalIds.add(id);
+    this.emit();
+  },
+
+  clearSelection() { this.selectedProposalIds.clear(); this.emit(); },
 };
 
 async function opfsDir() {
@@ -77,34 +91,34 @@ async function opfsDir() {
   return root.getDirectoryHandle('docket-drafts', { create: true });
 }
 
-function draftKey(proposalId, hunkId) {
-  return `${proposalId}__${hunkId}.draft`;
+function draftKey(proposalId, fileId) {
+  return `${proposalId}__${fileId}.draft`;
 }
 
-export async function saveDraft(proposalId, hunkId, content) {
+export async function saveDraft(proposalId, fileId, content) {
   try {
     const dir = await opfsDir();
     if (!dir) return;
-    const fh = await dir.getFileHandle(draftKey(proposalId, hunkId), { create: true });
+    const fh = await dir.getFileHandle(draftKey(proposalId, fileId), { create: true });
     const w = await fh.createWritable();
     await w.write(content);
     await w.close();
   } catch { /* ignore */ }
 }
 
-export async function loadDraft(proposalId, hunkId) {
+export async function loadDraft(proposalId, fileId) {
   try {
     const dir = await opfsDir();
     if (!dir) return null;
-    const fh = await dir.getFileHandle(draftKey(proposalId, hunkId), { create: false });
+    const fh = await dir.getFileHandle(draftKey(proposalId, fileId), { create: false });
     return await (await fh.getFile()).text();
   } catch { return null; }
 }
 
-export async function clearDraft(proposalId, hunkId) {
+export async function clearDraft(proposalId, fileId) {
   try {
     const dir = await opfsDir();
     if (!dir) return;
-    await dir.removeEntry(draftKey(proposalId, hunkId));
+    await dir.removeEntry(draftKey(proposalId, fileId));
   } catch { /* ignore */ }
 }

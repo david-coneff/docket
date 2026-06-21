@@ -44,7 +44,7 @@ export function renderToolbar(store, actions) {
   if (store.prefs.commitMode === 'batch') {
     const proposal = store.activeProposal();
     const committable = proposal
-      ? (proposal.hunks || []).filter((h) => COMMITTABLE.has(h.status)).length : 0;
+      ? (proposal.file_changes || []).filter((fc) => COMMITTABLE.has(fc.status)).length : 0;
     bar.append(el('button.btn.primary', {
       text: `Commit batch (${committable})`,
       disabled: committable === 0,

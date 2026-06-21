@@ -1,25 +1,32 @@
 {
   "id": "prop-2026-06-21-001",
   "title": "Add F-WIN-05: satellite focus race on multi-monitor",
-  "created": "2026-06-21T19:42:39.291914+00:00",
+  "created": "2026-06-21T18:00:00Z",
   "status": "open",
-  "tags": [
-    "hypothetical-fix",
-    "high"
-  ],
-  "agent_notes": "Observed on a two-monitor Windows setup; hypothetical pending user test.",
-  "hunks": [
+  "tags": ["hypothetical-fix", "needs-user-test"],
+  "agent_notes": "Three files updated together: primary failure record added, synthesis index cross-reference updated, and decision log entry added. All touch the same incident.",
+  "file_changes": [
     {
-      "id": "hunk-01",
-      "article": "rhiz-proposals/failure-paths/tauri-window-management.md",
-      "index_context": "rhiz-proposals/lessons-learned-synthesis.md",
-      "before": "# Failure Paths: Tauri Window Management\n\n## F-WIN-05 — Satellite focus race on multi-monitor\n\nThe satellite window sometimes opens behind the main window.\n",
-      "after": "# Failure Paths: Tauri Window Management\n\n## F-WIN-05 — Satellite focus race on multi-monitor\n\n**Feature scope**: `DockSystem.js` satellite creation on multi-monitor setups.\n\nThe satellite window sometimes opens behind the main window when the second\nmonitor is the active display. Calling `setFocus()` synchronously after\n`WebviewWindow` creation, before the OS has mapped the frame, is a no-op.\n\n**Fix**: await the window `tauri://created` event, then `setFocus()`.\n",
+      "id": "file-01",
+      "path": "rhiz-memory/state/failure-paths/tauri-window-management.md",
+      "rationale": "Primary failure record — adds F-WIN-05 as a new confirmed failure pattern for satellite window focus races on multi-monitor setups.",
+      "before": "# Tauri Window Management Failures\n\nKnown failure modes for Tauri window focus and positioning.\n",
+      "after": "# Tauri Window Management Failures\n\nKnown failure modes for Tauri window focus and positioning.\n\n## F-WIN-05: Satellite focus race on multi-monitor\n\nWhen the satellite window is opened on a secondary monitor while the primary window has focus, a race condition causes the satellite to lose focus immediately after creation. Observed on Windows 11 with DPI scaling > 100%.\n",
       "status": "pending",
-      "tags": [
-        "attempted-fix",
-        "needs-user-test"
-      ],
+      "tags": ["attempted-fix"],
+      "reviewer_edit": null,
+      "reviewer_edit_mode": null,
+      "reviewer_edit_notes": null,
+      "comments": []
+    },
+    {
+      "id": "file-02",
+      "path": "rhiz-memory/state/lessons-learned-synthesis.md",
+      "rationale": "Synthesis index — adds cross-reference entry for F-WIN-05 under the window management section.",
+      "before": "## Window Management\n\n- F-WIN-01: Initial focus lost on launch\n- F-WIN-03: Resize race on restore\n",
+      "after": "## Window Management\n\n- F-WIN-01: Initial focus lost on launch\n- F-WIN-03: Resize race on restore\n- F-WIN-05: Satellite focus race on multi-monitor (hypothetical-fix, needs-user-test)\n",
+      "status": "pending",
+      "tags": [],
       "reviewer_edit": null,
       "reviewer_edit_mode": null,
       "reviewer_edit_notes": null,

@@ -10,15 +10,19 @@ Usage:
   python docket-propose.py new
       --title TITLE
       --agent-notes NOTES
-      --article ARTICLE_PATH
+      --path FILE_PATH
       --after PROPOSED_PATH
+      [--rationale TEXT]
+      [--tags TAG ...]
+      [--proposal-tags TAG ...]
       [--proposals-dir DIR]
 
-  python docket-propose.py add-hunk
+  python docket-propose.py add-file
       --proposal PROPOSAL_ID
-      --article ARTICLE_PATH
+      --path FILE_PATH
       --after PROPOSED_PATH
-      [--index-context INDEX_PATH]
+      [--rationale TEXT]
+      [--tags TAG ...]
       [--proposals-dir DIR]
 
   python docket-propose.py validate
@@ -43,7 +47,6 @@ Exit codes:
 import argparse
 import hashlib
 import json
-import os
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -52,57 +55,55 @@ DEFAULT_PROPOSALS_DIR = "rhiz-proposals"
 DEFAULT_TAXONOMY = "tag-taxonomy.md"
 
 VALID_STATUSES = {"open", "approved", "changes-requested", "rejected", "superseded"}
-VALID_HUNK_STATUSES = {
+VALID_FILE_STATUSES = {
     "pending", "approved", "approved-working-draft",
     "edited-commit-as-is", "edited-for-agent",
     "changes-requested", "rejected",
 }
 VALID_EDIT_MODES = {"commit-as-is", "agent-feedback"}
 
-# rhiz-Core §1.2 — canonical hashing scope marker. The CID covers everything
-# from the line *following* this marker through end-of-file.
+# rhiz-Core §1.2 — canonical hashing scope marker.
 HASH_SCOPE_MARKER = "CONTENT HASHING SCOPE START"
 
 
 # ---------------------------------------------------------------------------
-# Schema validation (no external deps)
+# Schema validation
 # ---------------------------------------------------------------------------
 
 def validate_proposal(obj: dict) -> list[str]:
     """Return a list of validation errors. Empty list = valid."""
     errors = []
 
-    for field in ("id", "title", "created", "status", "hunks"):
+    for field in ("id", "title", "created", "status", "file_changes"):
         if field not in obj:
             errors.append(f"Missing required field: {field}")
 
     if "status" in obj and obj["status"] not in VALID_STATUSES:
         errors.append(f"Invalid status '{obj['status']}'. Must be one of: {VALID_STATUSES}")
 
-    if "hunks" in obj:
-        if not isinstance(obj["hunks"], list) or len(obj["hunks"]) == 0:
-            errors.append("'hunks' must be a non-empty array")
+    if "file_changes" in obj:
+        if not isinstance(obj["file_changes"], list) or len(obj["file_changes"]) == 0:
+            errors.append("'file_changes' must be a non-empty array")
         else:
-            for i, hunk in enumerate(obj["hunks"]):
-                prefix = f"hunks[{i}]"
-                for field in ("id", "article", "before", "after", "status"):
-                    if field not in hunk:
+            for i, fc in enumerate(obj["file_changes"]):
+                prefix = f"file_changes[{i}]"
+                for field in ("id", "path", "before", "after", "status"):
+                    if field not in fc:
                         errors.append(f"{prefix}: missing required field '{field}'")
-                if "status" in hunk and hunk["status"] not in VALID_HUNK_STATUSES:
+                if "status" in fc and fc["status"] not in VALID_FILE_STATUSES:
                     errors.append(
-                        f"{prefix}: invalid status '{hunk['status']}'. "
-                        f"Must be one of: {VALID_HUNK_STATUSES}"
+                        f"{prefix}: invalid status '{fc['status']}'. "
+                        f"Must be one of: {VALID_FILE_STATUSES}"
                     )
-                if "comments" in hunk and not isinstance(hunk["comments"], list):
+                if "comments" in fc and not isinstance(fc["comments"], list):
                     errors.append(f"{prefix}: 'comments' must be an array")
-
-                mode = hunk.get("reviewer_edit_mode")
+                mode = fc.get("reviewer_edit_mode")
                 if mode is not None and mode not in VALID_EDIT_MODES:
                     errors.append(
                         f"{prefix}: invalid reviewer_edit_mode '{mode}'. "
                         f"Must be one of: {VALID_EDIT_MODES}"
                     )
-                if mode is not None and not hunk.get("reviewer_edit"):
+                if mode is not None and not fc.get("reviewer_edit"):
                     errors.append(
                         f"{prefix}: reviewer_edit_mode set but reviewer_edit is empty"
                     )
@@ -110,13 +111,13 @@ def validate_proposal(obj: dict) -> list[str]:
     return errors
 
 
-def new_hunk(hunk_id: str, article: str, index_ctx: str,
-             before: str, after: str, tags: list[str] | None) -> dict:
-    """Construct a hunk with the full docket field set."""
+def new_file_change(file_id: str, path: str, rationale: str,
+                    before: str, after: str, tags: list[str] | None) -> dict:
+    """Construct a file change entry."""
     return {
-        "id": hunk_id,
-        "article": article,
-        "index_context": index_ctx or "",
+        "id": file_id,
+        "path": path,
+        "rationale": rationale or "",
         "before": before,
         "after": after,
         "status": "pending",
@@ -152,9 +153,7 @@ def proposals_dir(base: Path, override: str | None) -> Path:
 def next_proposal_id(pdir: Path) -> str:
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     prefix = f"prop-{today}-"
-    existing = [
-        p.stem for p in pdir.glob(f"{prefix}*.proposal.json")
-    ]
+    existing = [p.stem for p in pdir.glob(f"{prefix}*.proposal.json")]
     seq = len(existing) + 1
     return f"{prefix}{seq:03d}"
 
@@ -191,46 +190,19 @@ def read_content(path_str: str, label: str) -> str:
 
 
 def resolve_agent_notes(args) -> str:
-    """Agent notes may be inline (--agent-notes) or a file (--agent-notes-file)."""
     if getattr(args, "agent_notes_file", None):
         return read_content(args.agent_notes_file, "--agent-notes-file")
     return args.agent_notes or ""
 
 
 def compute_cid(text: str) -> str | None:
-    """SHA-256 of everything after the HASH_SCOPE_MARKER line (rhiz-Core §1.2).
-
-    Returns the full hex digest, or None if the marker is absent.
-    """
+    """SHA-256 of everything after the HASH_SCOPE_MARKER line (rhiz-Core §1.2)."""
     lines = text.splitlines(keepends=True)
     for i, line in enumerate(lines):
         if HASH_SCOPE_MARKER in line:
             scope = "".join(lines[i + 1:])
             return hashlib.sha256(scope.encode("utf-8")).hexdigest()
     return None
-
-
-def infer_index_context(article_path: str, root: Path) -> str | None:
-    """Walk up from the article's directory looking for a likely index file."""
-    INDEX_NAMES = [
-        "lessons-learned-synthesis.md",
-        "index.md",
-        "decision-records-index.md",
-        "README.md",
-    ]
-    p = (root / article_path).resolve().parent
-    while True:
-        for name in INDEX_NAMES:
-            candidate = p / name
-            if candidate.exists():
-                try:
-                    return str(candidate.relative_to(root))
-                except ValueError:
-                    return str(candidate)
-        parent = p.parent
-        if parent == p:
-            return None
-        p = parent
 
 
 # ---------------------------------------------------------------------------
@@ -241,12 +213,13 @@ def cmd_new(args, root: Path) -> int:
     pdir = proposals_dir(root, args.proposals_dir)
     proposal_id = next_proposal_id(pdir)
 
-    before_content = read_content(args.article, "--article (before)")
-    after_content  = read_content(args.after,   "--after (proposed)")
-    index_ctx = args.index_context or infer_index_context(args.article, root)
+    before_content = read_content(args.path, "--path (before state)")
+    after_content  = read_content(args.after, "--after (proposed)")
 
-    hunk = new_hunk("hunk-01", args.article, index_ctx, before_content,
-                    after_content, args.tags)
+    fc = new_file_change(
+        "file-01", args.path, args.rationale or "",
+        before_content, after_content, args.tags,
+    )
 
     proposal = {
         "id": proposal_id,
@@ -255,7 +228,7 @@ def cmd_new(args, root: Path) -> int:
         "status": "open",
         "tags": args.proposal_tags or [],
         "agent_notes": resolve_agent_notes(args),
-        "hunks": [hunk],
+        "file_changes": [fc],
     }
 
     path = write_proposal(pdir, proposal)
@@ -263,28 +236,29 @@ def cmd_new(args, root: Path) -> int:
     return 0
 
 
-def cmd_add_hunk(args, root: Path) -> int:
+def cmd_add_file(args, root: Path) -> int:
     pdir = proposals_dir(root, args.proposals_dir)
     path, proposal = load_proposal(pdir, args.proposal)
 
     if proposal["status"] not in ("open", "changes-requested"):
         print(
-            f"Error: cannot add hunk to proposal with status '{proposal['status']}'",
+            f"Error: cannot add file to proposal with status '{proposal['status']}'",
             file=sys.stderr,
         )
         sys.exit(1)
 
-    before_content = read_content(args.article, "--article (before)")
-    after_content  = read_content(args.after,   "--after (proposed)")
-    index_ctx = args.index_context or infer_index_context(args.article, root)
+    before_content = read_content(args.path, "--path (before state)")
+    after_content  = read_content(args.after, "--after (proposed)")
 
-    seq = len(proposal["hunks"]) + 1
-    hunk = new_hunk(f"hunk-{seq:02d}", args.article, index_ctx,
-                    before_content, after_content, args.tags)
-    proposal["hunks"].append(hunk)
+    seq = len(proposal["file_changes"]) + 1
+    fc = new_file_change(
+        f"file-{seq:02d}", args.path, args.rationale or "",
+        before_content, after_content, args.tags,
+    )
+    proposal["file_changes"].append(fc)
 
     path = write_proposal(pdir, proposal)
-    print(f"Updated: {path}  ({seq} hunks total)")
+    print(f"Updated: {path}  ({seq} file(s) total)")
     return 0
 
 
@@ -319,9 +293,9 @@ def cmd_list(args, root: Path) -> int:
         s = obj.get("status", "?")
         if status_filter and s != status_filter:
             continue
-        hunk_count = len(obj.get("hunks", []))
-        pending = sum(1 for h in obj.get("hunks", []) if h.get("status") == "pending")
-        print(f"  {obj.get('id','?'):30s}  {s:20s}  {hunk_count} hunk(s), {pending} pending  — {obj.get('title','')}")
+        fc_count = len(obj.get("file_changes", []))
+        pending = sum(1 for fc in obj.get("file_changes", []) if fc.get("status") == "pending")
+        print(f"  {obj.get('id','?'):30s}  {s:20s}  {fc_count} file(s), {pending} pending  — {obj.get('title','')}")
     return 0
 
 
@@ -336,16 +310,14 @@ def cmd_stamp_taxonomy(args, root: Path) -> int:
     text = path.read_text(encoding="utf-8")
     cid = compute_cid(text)
     if cid is None:
-        print(f"Error: no '{HASH_SCOPE_MARKER}' marker found in {path}",
-              file=sys.stderr)
+        print(f"Error: no '{HASH_SCOPE_MARKER}' marker found in {path}", file=sys.stderr)
         return 1
     cid_short = cid[:8]
     adopted = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
 
     lines = text.splitlines(keepends=True)
     if not lines or lines[0].rstrip("\n") != "---":
-        print("Error: file does not begin with a YAML frontmatter block ('---')",
-              file=sys.stderr)
+        print("Error: file does not begin with a YAML frontmatter block ('---')", file=sys.stderr)
         return 1
     close = None
     for i in range(1, len(lines)):
@@ -389,22 +361,22 @@ def main() -> int:
     # new
     p_new = sub.add_parser("new", help="Create a new proposal")
     p_new.add_argument("--title",            required=True)
-    p_new.add_argument("--agent-notes",      default="", help="Inline agent notes")
-    p_new.add_argument("--agent-notes-file", default=None, help="Path to agent notes (overrides --agent-notes)")
-    p_new.add_argument("--article",          required=True, help="Path to existing article (before state)")
-    p_new.add_argument("--after",            required=True, help="Path to proposed article content")
-    p_new.add_argument("--index-context",    default=None,  help="Path to parent index (auto-detected if omitted)")
-    p_new.add_argument("--tags",             nargs="*", default=None, help="Hunk-level tags")
+    p_new.add_argument("--agent-notes",      default="", help="Inline agent notes (commit message)")
+    p_new.add_argument("--agent-notes-file", default=None, help="Path to agent notes file (overrides --agent-notes)")
+    p_new.add_argument("--path",             required=True, help="Path to the file being changed (current state on disk)")
+    p_new.add_argument("--after",            required=True, help="Path to the proposed file content")
+    p_new.add_argument("--rationale",        default="", help="Why this specific file is being changed")
+    p_new.add_argument("--tags",             nargs="*", default=None, help="File-change-level tags")
     p_new.add_argument("--proposal-tags",    nargs="*", default=None, help="Proposal-level tags")
     p_new.add_argument("--proposals-dir",    default=None)
 
-    # add-hunk
-    p_add = sub.add_parser("add-hunk", help="Add a hunk to an existing open proposal")
+    # add-file
+    p_add = sub.add_parser("add-file", help="Add a file change to an existing open proposal")
     p_add.add_argument("--proposal",      required=True, help="Proposal ID")
-    p_add.add_argument("--article",       required=True)
-    p_add.add_argument("--after",         required=True)
-    p_add.add_argument("--index-context", default=None)
-    p_add.add_argument("--tags",          nargs="*", default=None, help="Hunk-level tags")
+    p_add.add_argument("--path",          required=True, help="Path to the file being changed")
+    p_add.add_argument("--after",         required=True, help="Path to the proposed file content")
+    p_add.add_argument("--rationale",     default="", help="Why this specific file is being changed")
+    p_add.add_argument("--tags",          nargs="*", default=None, help="File-change-level tags")
     p_add.add_argument("--proposals-dir", default=None)
 
     # stamp-taxonomy
@@ -418,7 +390,7 @@ def main() -> int:
 
     # list
     p_lst = sub.add_parser("list", help="List proposals")
-    p_lst.add_argument("--status",        default="all",
+    p_lst.add_argument("--status", default="all",
                        choices=["open", "changes-requested", "approved", "rejected", "all"])
     p_lst.add_argument("--proposals-dir", default=None)
 
@@ -431,7 +403,7 @@ def main() -> int:
 
     dispatch = {
         "new":            cmd_new,
-        "add-hunk":       cmd_add_hunk,
+        "add-file":       cmd_add_file,
         "validate":       cmd_validate,
         "list":           cmd_list,
         "stamp-taxonomy": cmd_stamp_taxonomy,

@@ -1,0 +1,553 @@
+# Roadmap: docket — Knowledge Article Approval Workflow
+
+**Status**: Active — implemented (Phases 1–6) at repo root. Phase 7 (native Tauri) remains deferred.  
+**Recorded**: 2026-06-21  
+**Category**: Governance tooling  
+**Depends on**: Vite, `rhiz-lint.py` (david-coneff/rhizome), `docket-propose.py`, `tag-taxonomy.md`, rhiz-State §6.8  
+
+> **Implementation note (2026-06-21)**: built as a zero-runtime-dependency
+> Vite app at repo root of david-coneff/docket. Theme tokens (`--rhiz-tag-*`) mirror the
+> taxonomy so Shoelace form elements can be substituted later without
+> restructuring. All seven open questions below are resolved. The diff engine
+> and resolution state machine ship with passing unit tests (`npm test`).
+
+---
+
+## Problem Statement
+
+When an agent proposes changes to rhizome knowledge articles, the human reviewer
+currently has no structured way to:
+- Review prose edits with track-changes visibility (additions/deletions)
+- Approve or reject individual article-scoped hunks atomically
+- Edit the proposed content directly and signal whether that edit is final or is
+  feedback for the agent to reason about further
+- Attach screenshots, logs, or binary blobs to feedback comments
+- Return structured feedback to the agent for the next revision round
+
+The existing git PR workflow is code-diff-paradigm (line-level) and is not
+suitable for qualitative prose governance work. The goal is a review interface
+that feels closer to MS Word's track-changes/review mode than to a code diff.
+
+---
+
+## Decided Architecture
+
+### 1. Proposal Format — JSON artifacts, agent-generated via CLI tool
+
+Proposals are JSON files committed to a `rhiz-proposals/` directory in the
+governed project repository. The agent uses a CLI tool (`docket-propose.py`)
+to generate and validate the JSON — so that the agent's output tokens go to
+the *content* of the proposal, and the tool handles schema enforcement,
+file naming, timestamps, and directory hygiene.
+
+**Why a CLI tool rather than raw JSON output:**  
+JSON structure errors in a proposal artifact would silently corrupt the review
+queue. The CLI tool accepts content strings as arguments or stdin, validates
+them against the proposal schema, and writes the file. The agent only needs to
+produce the content; the tool produces the artifact.
+
+**Proposal artifact schema** (`rhiz-proposals/<id>.proposal.json`):
+```json
+{
+  "$schema": "../schemas/proposal.schema.json",
+  "id": "prop-2026-06-21-001",
+  "title": "Add F-WIN-05: satellite focus race on multi-monitor",
+  "created": "2026-06-21T18:00:00Z",
+  "status": "open",
+  "tags": ["hypothetical-fix", "needs-user-test"],
+  "agent_notes": "Free text: why these changes, what was the triggering observation.",
+  "hunks": [
+    {
+      "id": "hunk-01",
+      "article": "rhiz-memory/state/failure-paths/tauri-window-management.md",
+      "index_context": "rhiz-memory/state/lessons-learned-synthesis.md",
+      "before": "...full original article content...",
+      "after":  "...full proposed article content...",
+      "status": "pending",
+      "tags": ["attempted-fix"],
+      "reviewer_edit": null,
+      "reviewer_edit_mode": null,
+      "reviewer_edit_notes": null,
+      "comments": []
+    }
+  ]
+}
+```
+
+**Hunk fields:**
+
+- `before` / `after` — agent-authored content, full file strings. The diff
+  between them is computed by the UI at render time.
+- `reviewer_edit` — the reviewer's direct edit of the proposed content, stored
+  as a full file string. `null` when no direct edit has been made. Set only
+  by the docket UI; never by the agent.
+- `reviewer_edit_mode` — `"commit-as-is"` or `"agent-feedback"`. See §3.
+  `null` when `reviewer_edit` is null.
+- `reviewer_edit_notes` — optional free-text note from the reviewer explaining
+  the intent of their edit (e.g. "fixed the wording in para 3" or "marked the
+  section that needs deeper thought"). `null` when no edit has been made.
+
+`reviewer_edit` is intentionally separate from `after` — the agent's proposal
+is preserved verbatim alongside the reviewer's version, so the agent can diff
+them and understand exactly what changed and why.
+
+**`docket-propose` CLI (docket-propose.py) — interface:**
+
+Short scalar fields (`--title`, `--tags`, `--proposal`) are passed as CLI args.
+Large multi-line content (`--before`, `--after`, `--agent-notes`) is passed as
+`--file` path references — the tool reads the file — to avoid shell-escaping
+multi-KB article bodies. No interactive `$EDITOR` mode; the agent is not
+interactive.
+
+```
+# Create a new proposal (before/after supplied as file paths)
+python docket-propose.py new \
+  --title "Add F-WIN-05" \
+  --tags hypothetical-fix needs-user-test \
+  --agent-notes-file path/to/notes.txt \
+  --article path/to/article.md \
+  --after path/to/proposed-article.md
+
+# Add a hunk to an existing open proposal
+python docket-propose.py add-hunk \
+  --proposal prop-2026-06-21-001 \
+  --article path/to/another.md \
+  --after path/to/proposed-another.md \
+  --tags attempted-fix
+
+# Validate an existing proposal file
+python docket-propose.py validate --proposal prop-2026-06-21-001
+
+# List open proposals, optionally filtered by tag
+python docket-propose.py list --status open
+
+# Compute and stamp the CID hash on a tag taxonomy file
+python docket-propose.py stamp-taxonomy [--file path/to/tag-taxonomy.md]
+```
+
+---
+
+### 2. Tag Taxonomy Versioning
+
+The tag vocabulary is defined in a versioned canonical file:
+[`tag-taxonomy.md`](./tag-taxonomy.md).
+
+A project may override by placing its own `tag-taxonomy.md` in its
+`rhiz-proposals/` directory. The UI loads the project-local file if present;
+otherwise falls back to `tag-taxonomy.md` at repo root.
+
+**Version identity** follows rhiz-Core §1 (Content Identity Governance).
+The taxonomy file carries YAML frontmatter (rhiz-Core §1.6) excluded from the
+hash:
+
+```yaml
+---
+cid-short: <first 8 hex chars of SHA-256 of content after SCOPE START marker>
+adopted: <ISO-8601 timestamp to the second of formal adoption>
+schema-version: "1"
+---
+```
+
+When the taxonomy changes, the hash changes and `adopted` is updated.
+Previous versions are recoverable from git history.
+
+**Stamping**: `python docket-propose.py stamp-taxonomy` computes the hash
+and writes `cid-short` and `adopted` back into the frontmatter in-place.
+
+**Tag validation**: `docket-propose` and `rhiz-lint` warn (not error) when a
+proposal uses a tag not in the active taxonomy. Freeform tags are always
+accepted.
+
+#### Tag Categories (summary)
+
+| Category | Color token | Purpose |
+|---|---|---|
+| `bug-lifecycle` | `--rhiz-tag-bug` | Defect and fix lifecycle; maps to §6.7 confirmed/hypothetical |
+| `hypothesis` | `--rhiz-tag-hypothesis` | Intent change vs. implementation change — mutually exclusive |
+| `prose-governance` | `--rhiz-tag-prose` | Article quality, drafts, structural concerns |
+| `process` | `--rhiz-tag-process` | Queue workflow: blockers, staleness |
+
+See [`tag-taxonomy.md`](./tag-taxonomy.md) for full definitions.
+
+**On the intent / implementation distinction** (`hypothesis` category):
+`intent-hypothesis` and `implementation-hypothesis` are mutually exclusive at
+the hunk level. Intent changes require deliberation before implementation
+follows; implementation changes can be evaluated on technical merit once intent
+is settled. The tags make this visible in the queue without opening the hunk.
+
+---
+
+### 3. Approval States and Feedback Mechanisms
+
+#### 3.1 Six hunk resolution states
+
+A hunk resolves to one of six states. All six include an optional notes /
+feedback field.
+
+| State | Content committed | Agent action |
+|---|---|---|
+| **Approved** | Agent's `after` | Apply `after` and commit. |
+| **Approved — working draft** | Agent's `after` | Apply `after`, record confirmation status as Hypothetical. Tags `working-draft` automatically. |
+| **Edited — commit as-is** | Reviewer's `reviewer_edit` | Apply `reviewer_edit` and commit. No further agent analysis needed. |
+| **Edited — for agent** | *(not committed yet)* | Read `reviewer_edit` as annotated feedback. Diff `after` vs `reviewer_edit` to understand what the reviewer changed and why. Re-propose. |
+| **Request changes** | *(not committed yet)* | Read comments. Revise and re-propose. |
+| **Rejected** | *(nothing)* | Do not re-propose unless framing changes substantially. |
+
+#### 3.2 Commit mode
+
+The interface operates in one of two commit modes, selectable as a persistent
+UI preference:
+
+- **Immediate mode**: each hunk is committed the moment it is approved or
+  resolved as `Edited — commit as-is`. No batch action required. Suitable for
+  single-hunk proposals or when the reviewer wants to land each change
+  independently.
+
+- **Batch mode**: approved and edited-commit hunks are staged but not committed
+  until the reviewer clicks a **Commit batch** button. The button is disabled
+  until at least one hunk is in a committable state. Suitable for multi-hunk
+  proposals where partial application would leave articles in an inconsistent
+  state mid-review.
+
+The current mode is displayed persistently in the toolbar. Switching modes
+during an active review is allowed; already-committed hunks (in Immediate mode)
+are not affected.
+
+#### 3.3 Direct Edit — the reviewer edit mechanism
+
+The direct edit states (`Edited — commit as-is` and `Edited — for agent`)
+fill a gap that comments alone cannot fill: they let the reviewer express
+feedback *within the text itself*, rather than quoting it in a separate comment
+box.
+
+**When to use each:**
+
+- **Edited — commit as-is**: the reviewer has made a complete, final correction
+  to the proposal — a wording fix, a factual correction, a restructuring that
+  does not need further agent analysis. The reviewer's version replaces the
+  agent's. The agent treats this exactly like an Approve, except it commits
+  `reviewer_edit` instead of `after`.
+
+- **Edited — for agent**: the reviewer has marked up the proposal to show what
+  they want changed — crossing out a paragraph, rewriting a sentence they want
+  reconsidered, annotating a section with `[TODO: expand this]` inline. This
+  is not a final version; it is a richer form of feedback than a comment. The
+  agent diffs `after` vs `reviewer_edit`, reads `reviewer_edit_notes`, and
+  uses the combination to understand what requires further analysis before
+  re-proposing. No content is committed from this state.
+
+**Why keep `after` intact rather than overwriting it:**  
+The agent needs to see both what it proposed (`after`) and what the reviewer
+changed (`reviewer_edit`) to understand the delta. Overwriting `after` would
+destroy that signal.
+
+**Auto-tagging:**
+- `Edited — commit as-is` adds `reviewer-edited` to the hunk's tags.
+- `Edited — for agent` adds `reviewer-edited` and `needs-agent-analysis`.
+
+#### 3.4 Comment schema within a hunk
+
+```json
+{
+  "id": "comment-01",
+  "created": "2026-06-21T20:00:00Z",
+  "role": "approval-note | change-request | rejection-rationale | edit-note | general",
+  "text": "Markdown text from the reviewer.",
+  "attachments": [
+    {
+      "filename": "ci-log.txt",
+      "mime_type": "text/plain",
+      "path": "/absolute/or/relative/path/to/ci-log.txt"
+    }
+  ]
+}
+```
+
+**Attachment handling**: attachments are stored as file-path references, not
+base64-encoded blobs. The reviewer drags and drops a file onto the attachment
+zone; the UI records the file's absolute path (from the File System Access API)
+in the JSON. The agent resolves the path when reading the export package.
+This keeps JSON artifacts compact regardless of attachment size, and avoids
+base64 inflation in both the file and the agent's context window.
+
+`edit-note` is the role used when `reviewer_edit_notes` is non-null and the
+reviewer chooses to elaborate further in a comment alongside their direct edit.
+`reviewer_edit_notes` is the short inline note; a full comment with
+`role: edit-note` is for longer explanation.
+
+---
+
+### 4. Commit Flow
+
+- **Agent commits proposals**: `rhiz-proposals/<id>.proposal.json` committed.
+- **Human reviews in docket UI**: resolves each hunk to one of six states.
+  UI writes updated proposal JSON (to the working directory; see §5) including
+  `reviewer_edit`, `reviewer_edit_mode`, `reviewer_edit_notes` when present.
+- **Agent applies resolved hunks**:
+  - `Approved` / `Approved — working draft`: commits `after`.
+  - `Edited — commit as-is`: commits `reviewer_edit`. Diffs `after` vs
+    `reviewer_edit` and records the delta in a brief commit note for
+    auditability.
+  - `Edited — for agent`: does *not* commit. Reads the diff between `after`
+    and `reviewer_edit` plus `reviewer_edit_notes` and any comments as the
+    combined feedback signal. Revises and re-proposes.
+  - `Request changes` / `Rejected`: reads comments. Revises or closes.
+- **No manual commit by the human** — agent owns both proposal commit and
+  approval-application commit.
+
+---
+
+### 5. Deployment Target — Standalone HTML first
+
+The first deployment target is a standalone `index.html` in Chromium.
+
+**Working directory**: the user selects a working directory via the native file
+picker (`showDirectoryPicker()`). The selection is persisted in `localStorage`
+so the folder opens automatically on next launch. The working directory is the
+root for reading `rhiz-proposals/` and writing resolved proposal JSON — no
+drag-and-drop of the folder is required after the first pick.
+
+**Attachments**: drag-and-drop of individual files onto the attachment zone
+stores the file's absolute path as a path reference in the JSON (see §3.4).
+No base64 encoding; the file stays on disk.
+
+**Export**: resolved proposal JSON is written back to the working directory
+(`rhiz-proposals/<id>.resolved.json`) automatically. No separate export/download
+action required. The agent is told the path.
+
+**Native Tauri as "nice to have"**: auto-load folder on launch, direct CLI
+invocation. Promote only if the file-picker + localStorage workflow becomes
+real friction.
+
+---
+
+## UI Layout
+
+Three panels, following Tessel's dock pattern:
+
+```
+┌──────────────────┬───────────────────────────────────┬────────────────────┐
+│   Queue Panel    │         Review Panel              │  Context + Feedback│
+│  [sort ▾]        │  [Composed][Review mode][Edit ✎]  │                    │
+│                  │                                   │ ── Index context ──│
+│ prop-001         │  Article content here             │  lessons-learned.. │
+│  [hypothetical]  │  with ~~deletions~~ and           │  > tauri-window-mg │
+│  [needs-test]    │  ==additions== rendered           │                    │
+│                  │  inline at word granularity       │ ── Tags ──────────│
+│ prop-002         │                                   │  [intent-hyp] x    │
+│  [intent-hyp]    │  < Hunk 1 of 2 >                  │  [+ add tag]       │
+│  [working-draft] │                                   │ ── Feedback ───────│
+│                  │                                   │  [comment editor]  │
+│                  │                                   │  [attachments]     │
+│                  │                                   │  [Approve ▾]       │
+│                  │                                   │  [Edit ▾]          │
+│                  │                                   │  [Request changes] │
+│                  │                                   │  [Reject]          │
+└──────────────────┴───────────────────────────────────┴────────────────────┘
+```
+
+**Toolbar** (above all panels):
+- Working directory path + **Change folder** button  
+- Commit mode toggle: **Immediate** | **Batch** (persisted in localStorage)  
+- **Commit batch** button (Batch mode only; disabled until at least one hunk is committable)  
+
+**Menu bar** `File` menu:
+- Open working directory  
+- ─────────────────  
+- **Tag Taxonomy** — Taxonomy Inspector
+
+### Queue Panel — Sorting
+
+The queue is reviewer-reorderable (drag to reorder) with a **Sort ▾** control
+offering the following sort modes:
+
+- **Manual** (default, drag-reorderable)
+- **By date** — ascending or descending by `created`
+- **By tag** — groups proposals sharing a selected tag together
+- **By severity / importance** — ordered by an `importance` tag value when
+  present (agent-applied or reviewer-applied); untagged proposals sort last
+
+Sort preference is persisted in localStorage. Drag-reorder is only available
+in Manual mode; switching to a sort mode locks drag handles.
+
+### Review Panel — Three Tabs
+
+**Composed**: rendered Markdown preview of `after` (the agent's proposal) with
+all changes applied. Clean reading, no diff markup.
+
+**Review mode**: word-level track-changes diff between `before` and `after`.
+- Removed text: `<del>` styling, muted red, strikethrough
+- Added text: `<ins>` styling, muted green highlight
+- Code/YAML/JSON blocks: line-level diff
+
+**Edit ✎**: the reviewer's direct editing surface. Displays `after` content
+in a plain textarea (v1; WYSIWYG Markdown deferred to a later phase).
+
+- If `reviewer_edit` already exists (reviewer returned to the hunk), the
+  editor loads `reviewer_edit`, not `after`, so edits are additive.
+- A "Diff my edits" toggle within this tab shows the diff between `after`
+  and the current editor content — so the reviewer can see exactly what
+  they have changed relative to the agent's proposal before submitting.
+- Switching away from Edit tab preserves unsaved editor content in session
+  state (OPFS); it is not written to the resolved JSON until an edit action
+  is taken.
+
+### Context + Feedback Panel
+
+Four sections, present regardless of which review tab is active:
+
+**Context**: parent index document with the affected article's entry
+highlighted.
+
+**Tags**: editable tag chips. Autocomplete from active taxonomy. Warns on
+`intent-hypothesis` + `implementation-hypothesis` mutual exclusion.
+
+**Feedback**: Markdown comment editor + drag-and-drop attachment zone.
+Present for all six resolution states. Labeled "Notes (optional)" on
+Approve and edit states; "Required feedback" on Request Changes and Reject.
+
+**Actions:**
+
+- **Approve ▾** (dropdown):
+  - Approve
+  - Approve — working draft
+
+- **Edit ▾** (dropdown, active only when Edit tab has content differing from `after`):
+  - **Commit my edit** — resolves hunk as `Edited — commit as-is`. The
+    reviewer's edited content becomes what will be committed. Tags
+    `reviewer-edited` automatically.
+  - **Send edit as feedback** — resolves hunk as `Edited — for agent`. The
+    reviewer's edit is handed to the agent as annotated feedback for further
+    analysis; nothing is committed. Tags `reviewer-edited` +
+    `needs-agent-analysis` automatically. The `reviewer_edit_notes` field
+    (a short inline note, distinct from the full comment box) can be filled
+    here before submitting.
+
+- **Request changes**: requires non-empty feedback comment.
+- **Reject**: requires non-empty feedback comment.
+
+The Edit ▾ dropdown is disabled (greyed out) when the Edit tab has no
+content differing from `after`. This prevents accidentally submitting an
+empty or unchanged "edit."
+
+### Taxonomy Inspector (File > Tag Taxonomy)
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  Tag Taxonomy                                               │
+│                                                             │
+│  Source:  rhiz-proposals/tag-taxonomy.md  (project-local)  │
+│  Version:  2026-06-21T19:15:00Z  ·  cid-short: a1b2c3d4   │
+│  Schema:   v1                                               │
+│                                                             │
+│  ── bug-lifecycle ───────────────────────────────────────── │
+│  [known-bug]       Documents a confirmed defect…           │
+│  …                                                          │
+│  ── hypothesis ──────────────────────────────────────────── │
+│  [intent-hypothesis]         Proposes a change to what…    │
+│  [implementation-hypothesis] Proposes a change to how…     │
+│    ⚠ Mutually exclusive within a single hunk               │
+│  ── prose-governance ────────────────────────────────────── │
+│  …                                                          │
+│  ── process ─────────────────────────────────────────────── │
+│  …                                                          │
+└─────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Technical Architecture
+
+| Concern | Solution |
+|---|---|
+| Build | Vite, one component per file, no monolith JS or HTML |
+| Form elements | Shoelace (theme-aware, consistent with Tessel) |
+| Icons | Same SVG icon library as Tessel |
+| Theme | `ThemeManager.js` / CSS custom properties from Tessel |
+| Storage | OPFS via `StorageEngine.js` for UI state, drafts, unsaved edit tab content |
+| Persistent prefs | `localStorage` for working directory path, commit mode, sort order |
+| File access | File System Access API (`showDirectoryPicker`); selection persisted in localStorage |
+| Resolved output | Written to working directory (`rhiz-proposals/<id>.resolved.json`) automatically |
+| Attachments | File path references; drag-and-drop stores absolute path, not base64 |
+| Taxonomy loading | Load `rhiz-proposals/tag-taxonomy.md` if present; else `tag-taxonomy.md` at repo root |
+| Taxonomy version display | Parse frontmatter `cid-short` + `adopted`; show in File > Tag Taxonomy |
+| Tag validation | Warn (not error) on tags not in active taxonomy; freeform always accepted |
+| Queue ordering | Drag-reorderable (Manual mode) + sort by date / tag / importance; persisted in localStorage |
+| Commit mode | Immediate (commit per hunk) or Batch (stage until Commit batch button); persisted in localStorage |
+| Diff engine | Myers diff, word-level prose / line-level code fences. Used for both Review mode (before→after) and "Diff my edits" within Edit tab (after→reviewer_edit) |
+| Direct edit surface | Plain textarea in Edit ✎ tab (v1); WYSIWYG Markdown deferred to later phase |
+| Edit state tracking | `reviewer_edit` written to resolved JSON only when Edit ▾ action is taken; unsaved editor content stays in OPFS session state |
+| Proposal artifacts | JSON in `rhiz-proposals/`, validated by `docket-propose.py` |
+| Tag rendering | Shoelace `<sl-tag>` chips, color by `--rhiz-tag-<category>` tokens |
+| Lint gate | `rhiz-lint.py` (david-coneff/rhizome) result shown before final hunk approval |
+
+---
+
+## FOSS Alternative Evaluation
+
+**Phorge** — queue + approval state machine is the right shape; PHP monolith,
+line-level diff, not Markdown-native. Value: study queue state machine design.
+
+**Gitea PR review** — lightweight and in use, but code-diff paradigm, no
+structured feedback artifact for agent consumption.
+
+**OnlyOffice Community** — closest visual match for track-changes rendering;
+not Markdown-native, no repo integration, very heavy.
+
+**Verdict**: Build docket. No existing tool covers prose track-changes +
+repo-backed proposal artifacts + direct reviewer edit with commit-vs-feedback
+disambiguation + tag taxonomy versioning + agent feedback loop + standalone HTML.
+
+---
+
+## Open Questions Before Implementation
+
+All open questions are now resolved. No blockers to implementation.
+
+| # | Question | Status | Resolution |
+|---|---|---|---|
+| 1 | `docket-propose.py` interface | **Resolved** | Scalar fields as CLI args; large content (`before`, `after`, `agent-notes`) via `--file` path. No `$EDITOR`. |
+| 2 | Export package handoff UX | **Resolved** | Working directory selected via native file picker; path persisted in localStorage. Resolved JSON written to working directory automatically. Agent is told the path. |
+| 3 | Attachment handling | **Resolved** | File-path references preferred. Drag-and-drop stores the absolute path, not base64. JSON stays compact; agent reads the file directly. |
+| 4 | Hunk ordering | **Resolved** | Viewer-reorderable (drag in Manual mode). Sort options: Manual, by date, by tag, by importance. Preference persisted in localStorage. |
+| 5 | Partial approval commit | **Resolved** | Mode-based: Immediate (commit per hunk on approval) or Batch (stage until explicit Commit batch button). User selects mode; persisted in localStorage. |
+| 6 | Tag taxonomy ownership | **Resolved** | Versioned by CID hash + adopted timestamp per rhiz-Core §1. Projects override via `rhiz-proposals/tag-taxonomy.md`. UI exposes version in File > Tag Taxonomy. |
+| 7 | Edit tab surface | **Resolved** | Plain textarea for v1. WYSIWYG Markdown (contenteditable) deferred to a later phase. |
+
+---
+
+## Implementation Phases (when deferred status is lifted)
+
+1. **Phase 1 — Tooling**: `docket-propose.py` CLI + JSON schema (tags, comment
+   schema, `reviewer_edit` fields, `stamp-taxonomy` subcommand). File-path
+   argument handling for large content fields. Validate proposal artifact
+   format for real agent use.
+
+2. **Phase 2 — Diff engine**: Port or vendor `jsdiff`, write
+   mixed-granularity (word/line) prose renderer. Unit tests against known
+   before/after pairs. The same module is used for Review mode (before→after)
+   and "Diff my edits" (after→reviewer_edit).
+
+3. **Phase 3 — Standalone HTML shell**: Working directory picker with
+   localStorage persistence. Queue panel with tag chips, sorting (date / tag /
+   importance / manual drag), and commit mode toggle. Review panel Composed
+   tab. Resolved JSON written to working directory. File > Tag Taxonomy
+   inspector.
+
+4. **Phase 4 — Review mode rendering**: Wire diff engine into Review mode tab.
+   Style deletions/additions with Tessel CSS custom properties.
+
+5. **Phase 5 — Edit tab + Context + Feedback panel**: Edit ✎ tab with plain
+   textarea, "Diff my edits" toggle, OPFS persistence of unsaved content.
+   Edit ▾ dropdown with "Commit my edit" and "Send edit as feedback" options.
+   `reviewer_edit_notes` inline note field. Index context rendering, tag
+   editor with taxonomy autocomplete and mutual-exclusion warning, comment
+   editor, attachment drag-and-drop (stores path reference), all six
+   resolution states.
+
+6. **Phase 6 — rhiz-lint gate**: Lint proposed state in memory (using
+   `reviewer_edit` when present, else `after`) before final hunk approval.
+   Show results inline.
+
+7. **Phase 7 (if needed) — Tauri native app**: Auto-load folder on launch,
+   auto-save resolved JSON, direct agent CLI invocation.

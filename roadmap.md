@@ -802,6 +802,83 @@ lifecycle concept itself, comparing it to patterns in current use.
    changes, old actions become harder to parse. Version the schema and
    provide migrations.
 
+### Decided design principles (adopted 2026-06-22)
+
+The first three challenges above are resolved as adopted design principles for
+Phase 8+. They are no longer open: the lifecycle is built around them from the
+start, not retrofitted.
+
+#### DP-1 — Reduce overhead: the full lifecycle is opt-in, not mandatory
+
+The five-phase cycle (proposal → feedback → disposition → action →
+confirmation) is the *maximum* path, reserved for changes that warrant it.
+Most changes take a shorter path.
+
+- **Tiered proposals.** Every proposal carries a `weight` field:
+  `"trivial" | "standard" | "significant"`. The agent sets an initial value;
+  the reviewer can override it in the UI.
+  - `trivial` (typo, formatting, link fix): single-click approve commits
+    immediately; no separate disposition artifact, no confirmation phase.
+    The action is recorded inline on the proposal rather than in a separate
+    `actioned.json`.
+  - `standard`: proposal → disposition → action. Confirmation optional.
+  - `significant` (intent change, architectural, hypothesis-bearing): full
+    five-phase cycle, confirmation expected.
+- **Batch dispositions.** Multiple hunks resolved in one pass produce a single
+  disposition artifact and a single Claude action invocation (one commit, or
+  one commit per hunk by preference) — not N round-trips.
+- **Auto-disposition heuristics (conservative).** A `[quick-fix]` tag plus an
+  Approve with no attached feedback may auto-generate the disposition. Never
+  auto-approves; the human still clicks Approve. Heuristics only remove the
+  *artifact-authoring* step, never the *judgment* step.
+
+#### DP-2 — Offline queue + retry UI
+
+The UI must never block on agent or server availability. Dispositions are
+durable and replayable.
+
+- **Local durable queue.** A disposition is written to the working repo
+  (`rhiz-proposals/<id>.dispositioned.json`) the instant the human acts,
+  independent of whether the server/CLI is reachable. The human's judgment is
+  never lost to a network failure.
+- **Queue state machine.** Each queued disposition has a `delivery` field:
+  `"pending" | "in-flight" | "actioned" | "failed"`. The server transitions it
+  as it picks up, executes, and writes the result artifact.
+- **Retry UI.** A dedicated "Pending actions" view lists every disposition not
+  yet `actioned`, with its delivery state, last attempt time, and any error
+  from a `failed` attempt. Each row has a manual **Retry** control; the server
+  also retries `failed`/`pending` items with backoff when it reconnects.
+- **Offline-first parity.** With no server at all, docket still functions as
+  today's standalone tool: dispositions accumulate in the queue and are applied
+  whenever an agent/CLI next runs against the repo. The server is an
+  accelerator, not a dependency.
+
+#### DP-3 — Exploratory vs. actionable work are first-class, distinct modes
+
+Not every proposal wants to become a commit. The lifecycle distinguishes
+deliberation from execution explicitly so exploratory threads don't get forced
+through an action gate.
+
+- **`mode` field on every proposal:** `"exploratory" | "actionable"`.
+  - `exploratory`: no action gate, no `actionable` execution path. Dispositions
+    on exploratory proposals capture the human's *thinking* (notes, direction,
+    "pursue this / drop this / merge with prop-X") and never invoke the Claude
+    CLI to commit. The output is a recorded decision, not a code change.
+    Closing an exploratory thread can *spawn* an actionable proposal that
+    references it (`parent_proposal`).
+  - `actionable`: eligible for the disposition → action path described in
+    Phase 8.
+- **Grouped exploratory proposals.** Related exploratory ideas ("5 options for
+  improving X") render as a single grouped card in the queue, dispositioned
+  together, so exploration doesn't flood the queue with one-off items.
+- **Promotion, not duplication.** Promoting an exploratory thread to actionable
+  creates a new `actionable` proposal linked to the explored one — preserving
+  the reasoning trail rather than mutating the original's mode in place.
+
+These three principles share one rule: **the human's judgment step is never
+removed or automated away** — only the surrounding ceremony (artifact authoring,
+round-trips, action gating) is scaled to the weight and mode of the change.
+
 ### Comparison to decision record patterns
 
 | Pattern | docket approach | Tradeoff |
@@ -819,13 +896,16 @@ This is working and valuable. Keep it.
 
 **Phase 8 (future):** Introduce server + Claude CLI integration *only for
 workflows where*:
-- The human has explicitly marked a proposal as actionable (`actionable`
-  tag or explicit checkbox).
+- The proposal's `mode` is `actionable` (per DP-3) — exploratory proposals
+  never reach the execution path.
 - The disposition is "Approved" (not "Request changes" or "Rejected").
-- The agent CLI is confirmed available and healthy.
+- The agent CLI is confirmed available and healthy — and when it is not, the
+  disposition still lands in the durable offline queue (per DP-2) for later
+  replay.
 
 This keeps the feedback loop optional and does not require immediate
-infrastructure changes. Lightweight proposals continue to work as today.
+infrastructure changes. Trivial-weight proposals (per DP-1) continue to commit
+in a single click as they do today.
 
 **Phase 9 (future):** Add confirmation phase with result artifacts, gating
 the human's ability to close the loop on "Did this fix work?"

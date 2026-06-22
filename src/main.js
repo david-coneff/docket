@@ -10,22 +10,20 @@ import {
   supportsFSAccess, pickWorkingDirectory, readProposals, readProjectTaxonomy,
   readFilesViaInput, writeResolved,
 } from './lib/fsAccess.js';
-import { COMMITTABLE } from './lib/resolve.js';
+import { COMMITTABLE, isProposalReady, pendingCount } from './lib/resolve.js';
 import { renderMenubar, renderToolbar } from './components/toolbar.js';
 import { renderQueue } from './components/queue.js';
 import { renderReview, resetEditState } from './components/review.js';
 import { renderContextFeedback, resetFeedbackState } from './components/contextFeedback.js';
 
-// --- Taxonomy bootstrap (bundled default; project override loaded on open). --
 store.taxonomy = parseTaxonomy(defaultTaxonomyText);
 store.taxonomySource = `tag-taxonomy.md (default)`;
 
 const root = document.getElementById('app');
 
-// Reset transient per-hunk UI state when the active hunk changes.
 let lastActiveKey = null;
 function syncTransient() {
-  const key = `${store.activeProposalId}::${store.activeHunkIndex}`;
+  const key = `${store.activeProposalId}::${store.activeFileIndex}`;
   if (key !== lastActiveKey) { resetEditState(); resetFeedbackState(); lastActiveKey = key; }
 }
 
@@ -44,7 +42,6 @@ const actions = {
       const found = await readProposals(handle);
       store.setProposals(found);
     } else {
-      // Fallback: file input.
       const files = await readFilesViaInput();
       const tax = files.find((f) => f.taxonomy);
       if (tax) { store.taxonomy = parseTaxonomy(tax.taxonomy); store.taxonomySource = 'project-local (uploaded)'; }
@@ -56,24 +53,55 @@ const actions = {
     if (store.dirHandle) store.setProposals(await readProposals(store.dirHandle));
   },
 
-  // Called after a hunk resolves. In immediate mode, write the resolved
-  // artifact whenever the hunk became committable.
   async onResolve(state) {
     const proposal = store.activeProposal();
     if (store.prefs.commitMode === 'immediate' && COMMITTABLE.has(state)) {
       const res = await writeResolved(store.dirHandle, proposal);
-      flash(`Committed hunk → ${res.path}`);
+      flash(`Committed file → ${res.path}`);
     }
-    // Advance to next pending hunk if any.
-    const next = proposal.hunks.findIndex((h, i) => i > store.activeHunkIndex && h.status === 'pending');
-    if (next >= 0) store.setHunkIndex(next);
+    const next = (proposal.file_changes || []).findIndex(
+      (fc, i) => i > store.activeFileIndex && fc.status === 'pending'
+    );
+    if (next >= 0) store.setFileIndex(next);
     else store.emit();
+  },
+
+  async onBulkResolve(state) {
+    const proposal = store.activeProposal();
+    if (store.prefs.commitMode === 'immediate' && COMMITTABLE.has(state)) {
+      const res = await writeResolved(store.dirHandle, proposal);
+      flash(`Committed → ${res.path}`);
+    } else {
+      store.emit();
+    }
   },
 
   async commitBatch() {
     const proposal = store.activeProposal();
     const res = await writeResolved(store.dirHandle, proposal);
     flash(`Batch written → ${res.path}`);
+  },
+
+  async disposeSelected(ids) {
+    const ready = [], notReady = [];
+    for (const id of ids) {
+      const p = store.proposals.find((p) => p.data?.id === id);
+      if (!p) continue;
+      if (isProposalReady(p.data)) ready.push(p); else notReady.push(p.data);
+    }
+    for (const p of ready) {
+      await writeResolved(store.dirHandle, p.data);
+      store.disposedProposalIds.add(p.data.id);
+    }
+    store.selectedProposalIds.clear();
+    const msgs = [];
+    if (ready.length) msgs.push(`Disposed ${ready.length} proposal(s).`);
+    if (notReady.length) {
+      msgs.push(`${notReady.length} proposal(s) skipped — still have pending files:`);
+      notReady.forEach((d) => { const n = pendingCount(d); msgs.push(`  • ${d.title || d.id} (${n} file(s) pending)`); });
+    }
+    flash(msgs.join('\n'));
+    store.emit();
   },
 };
 
@@ -87,21 +115,20 @@ function render() {
   root.append(renderToolbar(store, actions));
 
   const panels = el('div.panels');
-  panels.append(renderQueue(store));
-  panels.append(renderReview(store, render));
+  panels.append(renderQueue(store, actions.disposeSelected));
+  panels.append(renderReview(store, render, actions.onBulkResolve));
   panels.append(renderContextFeedback(store, actions.onResolve, render));
   root.append(panels);
 
   if (flashMsg) {
     root.append(el('div', { text: flashMsg,
-      style: 'position:fixed;bottom:16px;right:16px;background:var(--accent);color:#fff;padding:10px 16px;border-radius:6px;z-index:60' }));
+      style: 'position:fixed;bottom:16px;right:16px;background:var(--accent);color:#fff;padding:10px 16px;border-radius:6px;z-index:60;white-space:pre-line' }));
   }
 }
 
 store.subscribe(() => render());
 render();
 
-// Surface FS-access capability for the user.
 if (!supportsFSAccess) {
   console.info('File System Access API unavailable — using file-input fallback (read) and download (write).');
 }

@@ -1,16 +1,12 @@
 // store.js — central app state with a tiny pub/sub, localStorage-backed
 // preferences, and OPFS-backed persistence of unsaved Edit-tab content.
-//
-// Persisted preferences (rhiz-review §3.2, §5, Queue sorting): commit mode,
-// sort mode, last working-directory name. The directory *handle* itself is
-// held in memory only (re-pick on reload unless the browser restores it).
 
 const PREFS_KEY = 'rhiz-review.prefs.v1';
 
 const DEFAULT_PREFS = {
-  commitMode: 'batch',        // 'immediate' | 'batch'
-  sortMode: 'manual',         // 'manual' | 'date' | 'tag' | 'importance'
-  sortTag: null,              // tag to group by when sortMode === 'tag'
+  commitMode: 'batch',
+  sortMode: 'manual',
+  sortTag: null,
   workingDirName: null,
 };
 
@@ -23,11 +19,13 @@ export const store = {
   prefs: loadPrefs(),
   dirHandle: null,
   taxonomy: null,
-  taxonomySource: 'default',     // 'default' | 'project-local'
-  proposals: [],                 // [{ name, data }]
-  manualOrder: [],               // proposal ids in manual order
+  taxonomySource: 'default',
+  proposals: [],
+  manualOrder: [],
   activeProposalId: null,
-  activeHunkIndex: 0,
+  activeFileIndex: 0,
+  selectedProposalIds: new Set(),
+  disposedProposalIds: new Set(),
   _subs: new Set(),
 
   subscribe(fn) { this._subs.add(fn); return () => this._subs.delete(fn); },
@@ -42,7 +40,6 @@ export const store = {
   setProposals(list) {
     this.proposals = list;
     const ids = list.map((p) => p.data?.id).filter(Boolean);
-    // Preserve any existing manual order; append new ids at the end.
     this.manualOrder = [
       ...this.manualOrder.filter((id) => ids.includes(id)),
       ...ids.filter((id) => !this.manualOrder.includes(id)),
@@ -55,32 +52,41 @@ export const store = {
     return this.proposals.find((p) => p.data?.id === this.activeProposalId)?.data || null;
   },
 
-  activeHunk() {
+  activeFile() {
     const p = this.activeProposal();
-    return p ? p.hunks[this.activeHunkIndex] || null : null;
+    return p ? (p.file_changes || [])[this.activeFileIndex] || null : null;
   },
 
-  setActive(proposalId, hunkIndex = 0) {
+  setActive(proposalId, fileIndex = 0) {
     this.activeProposalId = proposalId;
-    this.activeHunkIndex = hunkIndex;
+    this.activeFileIndex = fileIndex;
     this.emit();
   },
 
-  setHunkIndex(i) { this.activeHunkIndex = i; this.emit(); },
+  setFileIndex(i) { this.activeFileIndex = i; this.emit(); },
 
-  // Mutate the active hunk and re-emit.
-  updateActiveHunk(patch) {
-    const h = this.activeHunk();
-    if (!h) return;
-    Object.assign(h, patch);
+  updateActiveFile(patch) {
+    const fc = this.activeFile();
+    if (!fc) return;
+    Object.assign(fc, patch);
+    this.emit();
+  },
+
+  toggleProposalSelect(id) {
+    if (this.selectedProposalIds.has(id)) this.selectedProposalIds.delete(id);
+    else this.selectedProposalIds.add(id);
+    this.emit();
+  },
+
+  clearSelection() {
+    this.selectedProposalIds.clear();
     this.emit();
   },
 };
 
 // ---------------------------------------------------------------------------
-// OPFS persistence of unsaved Edit-tab content (rhiz-review §5 / Review panel).
-// Keyed by "<proposalId>::<hunkId>". Best-effort; silently no-ops if OPFS is
-// unavailable.
+// OPFS persistence of unsaved Edit-tab content.
+// Keyed by "<proposalId>::<fileId>".
 // ---------------------------------------------------------------------------
 
 async function opfsDir() {
@@ -89,34 +95,34 @@ async function opfsDir() {
   return root.getDirectoryHandle('rhiz-review-drafts', { create: true });
 }
 
-function draftKey(proposalId, hunkId) {
-  return `${proposalId}__${hunkId}.draft`;
+function draftKey(proposalId, fileId) {
+  return `${proposalId}__${fileId}.draft`;
 }
 
-export async function saveDraft(proposalId, hunkId, content) {
+export async function saveDraft(proposalId, fileId, content) {
   try {
     const dir = await opfsDir();
     if (!dir) return;
-    const fh = await dir.getFileHandle(draftKey(proposalId, hunkId), { create: true });
+    const fh = await dir.getFileHandle(draftKey(proposalId, fileId), { create: true });
     const w = await fh.createWritable();
     await w.write(content);
     await w.close();
   } catch { /* ignore */ }
 }
 
-export async function loadDraft(proposalId, hunkId) {
+export async function loadDraft(proposalId, fileId) {
   try {
     const dir = await opfsDir();
     if (!dir) return null;
-    const fh = await dir.getFileHandle(draftKey(proposalId, hunkId), { create: false });
+    const fh = await dir.getFileHandle(draftKey(proposalId, fileId), { create: false });
     return await (await fh.getFile()).text();
   } catch { return null; }
 }
 
-export async function clearDraft(proposalId, hunkId) {
+export async function clearDraft(proposalId, fileId) {
   try {
     const dir = await opfsDir();
     if (!dir) return;
-    await dir.removeEntry(draftKey(proposalId, hunkId));
+    await dir.removeEntry(draftKey(proposalId, fileId));
   } catch { /* ignore */ }
 }

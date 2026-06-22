@@ -1,5 +1,4 @@
-// contextFeedback.js — right panel: index context, tags, feedback, actions,
-// lint gate. Owns the six-state resolution UI (rhiz-review §Actions).
+// contextFeedback.js — right panel: tags, feedback, and resolution actions.
 import { el } from '../lib/dom.js';
 import { renderTags } from './tags.js';
 import { applyResolution, STATES, STATE_LABEL } from '../lib/resolve.js';
@@ -16,39 +15,18 @@ export function resetFeedbackState() { feedbackText = ''; editNotesText = ''; ed
 
 export function renderContextFeedback(store, onResolve, onChange) {
   const panel = el('div.panel.context');
-  const hunk = store.activeHunk();
-  if (!hunk) return panel;
+  const fc = store.activeFile();
+  if (!fc) return panel;
 
-  // --- Status pill ---
-  const resolved = hunk.status !== 'pending';
+  const resolved = fc.status !== 'pending';
   panel.append(el('div', { style: 'margin-bottom:10px' }, [
-    el(`span.status-pill${resolved ? '.resolved' : ''}`, { text: STATE_LABEL[hunk.status] || hunk.status }),
+    el(`span.status-pill${resolved ? '.resolved' : ''}`, { text: STATE_LABEL[fc.status] || fc.status }),
   ]));
 
-  // --- Index context ---
-  const ctx = el('div.section');
-  ctx.append(el('h3', { text: 'Index context' }));
-  if (hunk.index_context) {
-    const article = (hunk.article || '').split('/').pop();
-    const text = hunk.index_context;
-    const box = el('div.index-context');
-    // Highlight the line that references this article.
-    text.split('\n').forEach((line) => {
-      const row = el('div', { text: line + '\n' });
-      if (article && line.includes(article)) row.className = 'hit';
-      box.append(row);
-    });
-    ctx.append(box);
-  } else {
-    ctx.append(el('div', { text: '(no index context recorded)', style: 'color:var(--fg-muted)' }));
-  }
-  panel.append(ctx);
+  // Tags
+  panel.append(renderTags(fc, store.taxonomy, onChange));
 
-  // --- Tags ---
-  panel.append(renderTags(hunk, store.taxonomy, onChange));
-
-  // --- Feedback ---
-  const isHard = false; // request-changes/reject require feedback; checked at action time
+  // Feedback
   const fb = el('div.section');
   fb.append(el('h3', { text: 'Feedback' }));
   fb.append(el('div.feedback-label', { text: 'Notes (required for Request changes / Reject)' }));
@@ -56,9 +34,8 @@ export function renderContextFeedback(store, onResolve, onChange) {
     oninput: (e) => { feedbackText = e.target.value; } });
   fb.append(fbArea);
 
-  // Attachments as file-path references (rhiz-review §3.4).
   const attachList = el('ul.attach-list');
-  (hunk.comments || []).flatMap((c) => c.attachments || []).forEach((a) =>
+  (fc.comments || []).flatMap((c) => c.attachments || []).forEach((a) =>
     attachList.append(el('li', { text: `📎 ${a.filename} → ${a.path}` })));
   const zone = el('div.attach-zone', { text: 'Drag files here to attach as path references' });
   zone.addEventListener('dragover', (e) => { e.preventDefault(); zone.classList.add('drag'); });
@@ -74,7 +51,7 @@ export function renderContextFeedback(store, onResolve, onChange) {
   fb.append(zone, attachList);
   panel.append(fb);
 
-  // --- Edit notes (short inline note for direct edits) ---
+  // Edit note
   const en = el('div.section');
   en.append(el('div.feedback-label', { text: 'Edit note (short, for direct edits)' }));
   en.append(el('input', { type: 'text', value: editNotesText, placeholder: 'e.g. fixed wording in para 3',
@@ -82,42 +59,40 @@ export function renderContextFeedback(store, onResolve, onChange) {
     oninput: (e) => { editNotesText = e.target.value; } }));
   panel.append(en);
 
-  // --- Lint gate (Phase 6) ---
-  const lint = lintHunk(hunk);
+  // Lint gate
+  const lint = lintHunk(fc);
   const gate = el(`div.lint-gate${lint.errors.length ? '' : ' clean'}`);
   if (!lint.errors.length && !lint.warnings.length) gate.append(el('span', { text: '✓ rhiz-lint: clean' }));
   lint.errors.forEach((e) => gate.append(el('div.err', { text: `✗ ${e}` })));
   lint.warnings.forEach((w) => gate.append(el('div.warn', { text: `⚠ ${w}` })));
   panel.append(gate);
 
-  // --- Actions ---
-  panel.append(renderActions(store, hunk, onResolve, onChange));
+  panel.append(renderActions(store, fc, onResolve, onChange));
   return panel;
 }
 
 let pendingAttachments = [];
 
-function commitAttachments(hunk, role) {
+function commitAttachments(fc, role) {
   if (!pendingAttachments.length) return;
-  if (!hunk.comments) hunk.comments = [];
-  hunk.comments.push({
-    id: `comment-${(hunk.comments.length + 1).toString().padStart(2, '0')}`,
+  if (!fc.comments) fc.comments = [];
+  fc.comments.push({
+    id: `comment-${(fc.comments.length + 1).toString().padStart(2, '0')}`,
     created: new Date().toISOString(), role, text: '', attachments: pendingAttachments.slice(),
   });
   pendingAttachments = [];
 }
 
-function renderActions(store, hunk, onResolve, onChange) {
+function renderActions(store, fc, onResolve, onChange) {
   const wrap = el('div.actions');
   const finish = (state, opts) => {
-    commitAttachments(hunk, 'general');
-    applyResolution(hunk, state, opts);
-    clearDraft(store.activeProposalId, hunk.id);
+    commitAttachments(fc, 'general');
+    applyResolution(fc, state, opts);
+    clearDraft(store.activeProposalId, fc.id);
     resetFeedbackState();
     onResolve(state);
   };
 
-  // Approve ▾ (split)
   const approveSplit = el('div.split');
   if (approveMenuOpen) {
     approveSplit.append(el('div.menu', {}, [
@@ -128,15 +103,14 @@ function renderActions(store, hunk, onResolve, onChange) {
   approveSplit.append(el('button.btn.primary', { text: 'Approve ▾',
     style: 'width:100%', onclick: () => { approveMenuOpen = !approveMenuOpen; editMenuOpen = false; onChange(); } }));
 
-  // Edit ▾ (split) — enabled only when the edit surface differs from `after`.
-  const canEdit = editDiffersFromAfter(hunk);
+  const canEdit = editDiffersFromAfter(fc);
   const editSplit = el('div.split');
   if (editMenuOpen && canEdit) {
     editSplit.append(el('div.menu', {}, [
       el('button', { text: 'Commit my edit', onclick: () =>
-        finish(STATES.EDITED_COMMIT, { reviewerEdit: currentEditValue(hunk), editNotes: editNotesText, comment: feedbackText }) }),
+        finish(STATES.EDITED_COMMIT, { reviewerEdit: currentEditValue(fc), editNotes: editNotesText, comment: feedbackText }) }),
       el('button', { text: 'Send edit as feedback', onclick: () =>
-        finish(STATES.EDITED_FOR_AGENT, { reviewerEdit: currentEditValue(hunk), editNotes: editNotesText, comment: feedbackText }) }),
+        finish(STATES.EDITED_FOR_AGENT, { reviewerEdit: currentEditValue(fc), editNotes: editNotesText, comment: feedbackText }) }),
     ]));
   }
   editSplit.append(el('button.btn', { text: 'Edit ▾', disabled: !canEdit, style: 'width:100%',
@@ -145,7 +119,6 @@ function renderActions(store, hunk, onResolve, onChange) {
 
   wrap.append(el('div.row', {}, [approveSplit, editSplit]));
 
-  // Request changes / Reject — require feedback.
   const requireFb = (state) => {
     if (!feedbackText.trim()) { alert('Feedback is required for this action.'); return; }
     finish(state, { comment: feedbackText });

@@ -1,5 +1,4 @@
-// resolve.js — the six-state hunk resolution machine and queue sorting.
-// Mirrors rhiz-review §3.1 (states) and §3.3 (direct-edit auto-tagging).
+// resolve.js — the six-state file-change resolution machine and queue sorting.
 
 export const STATES = {
   APPROVED: 'approved',
@@ -20,79 +19,101 @@ export const STATE_LABEL = {
   rejected: 'Rejected',
 };
 
+export const STATE_ICON = {
+  pending: '○',
+  approved: '✓',
+  'approved-working-draft': '✓',
+  'edited-commit-as-is': '✓',
+  'edited-for-agent': '↩',
+  'changes-requested': '⚠',
+  rejected: '✗',
+};
+
 export const COMMITTABLE = new Set([
   STATES.APPROVED, STATES.APPROVED_WORKING_DRAFT, STATES.EDITED_COMMIT,
 ]);
 
-function addTag(hunk, tag) {
-  if (!Array.isArray(hunk.tags)) hunk.tags = [];
-  if (!hunk.tags.includes(tag)) hunk.tags.push(tag);
+function addTag(fc, tag) {
+  if (!Array.isArray(fc.tags)) fc.tags = [];
+  if (!fc.tags.includes(tag)) fc.tags.push(tag);
 }
 
-function pushComment(hunk, role, text) {
+function pushComment(fc, role, text) {
   if (!text) return;
-  if (!Array.isArray(hunk.comments)) hunk.comments = [];
-  hunk.comments.push({
-    id: `comment-${(hunk.comments.length + 1).toString().padStart(2, '0')}`,
+  if (!Array.isArray(fc.comments)) fc.comments = [];
+  fc.comments.push({
+    id: `comment-${(fc.comments.length + 1).toString().padStart(2, '0')}`,
     created: new Date().toISOString(),
     role, text, attachments: [],
   });
 }
 
 /**
- * Apply a resolution to a hunk in place.
+ * Apply a resolution to a file_change in place.
  * opts: { notes, comment, reviewerEdit, editNotes }
- * Auto-tagging and the reviewer_edit fields follow §3.3.
  */
-export function applyResolution(hunk, state, opts = {}) {
-  hunk.status = state;
+export function applyResolution(fc, state, opts = {}) {
+  fc.status = state;
 
   switch (state) {
     case STATES.APPROVED:
-      pushComment(hunk, 'approval-note', opts.notes);
+      pushComment(fc, 'approval-note', opts.notes);
       break;
 
     case STATES.APPROVED_WORKING_DRAFT:
-      addTag(hunk, 'working-draft');
-      pushComment(hunk, 'approval-note', opts.notes);
+      addTag(fc, 'working-draft');
+      pushComment(fc, 'approval-note', opts.notes);
       break;
 
     case STATES.EDITED_COMMIT:
-      hunk.reviewer_edit = opts.reviewerEdit ?? hunk.reviewer_edit;
-      hunk.reviewer_edit_mode = 'commit-as-is';
-      hunk.reviewer_edit_notes = opts.editNotes || hunk.reviewer_edit_notes || null;
-      addTag(hunk, 'reviewer-edited');
-      pushComment(hunk, 'edit-note', opts.comment);
+      fc.reviewer_edit = opts.reviewerEdit ?? fc.reviewer_edit;
+      fc.reviewer_edit_mode = 'commit-as-is';
+      fc.reviewer_edit_notes = opts.editNotes || fc.reviewer_edit_notes || null;
+      addTag(fc, 'reviewer-edited');
+      pushComment(fc, 'edit-note', opts.comment);
       break;
 
     case STATES.EDITED_FOR_AGENT:
-      hunk.reviewer_edit = opts.reviewerEdit ?? hunk.reviewer_edit;
-      hunk.reviewer_edit_mode = 'agent-feedback';
-      hunk.reviewer_edit_notes = opts.editNotes || hunk.reviewer_edit_notes || null;
-      addTag(hunk, 'reviewer-edited');
-      addTag(hunk, 'needs-agent-analysis');
-      pushComment(hunk, 'edit-note', opts.comment);
+      fc.reviewer_edit = opts.reviewerEdit ?? fc.reviewer_edit;
+      fc.reviewer_edit_mode = 'agent-feedback';
+      fc.reviewer_edit_notes = opts.editNotes || fc.reviewer_edit_notes || null;
+      addTag(fc, 'reviewer-edited');
+      addTag(fc, 'needs-agent-analysis');
+      pushComment(fc, 'edit-note', opts.comment);
       break;
 
     case STATES.CHANGES_REQUESTED:
-      pushComment(hunk, 'change-request', opts.comment);
+      pushComment(fc, 'change-request', opts.comment);
       break;
 
     case STATES.REJECTED:
-      pushComment(hunk, 'rejection-rationale', opts.comment);
+      pushComment(fc, 'rejection-rationale', opts.comment);
       break;
   }
-  return hunk;
+  return fc;
+}
+
+export function isProposalReady(proposal) {
+  const changes = proposal.file_changes || [];
+  return changes.length > 0 && changes.every((fc) => fc.status !== 'pending');
+}
+
+export function bulkApply(proposal, state, opts = {}) {
+  (proposal.file_changes || [])
+    .filter((fc) => fc.status === 'pending')
+    .forEach((fc) => applyResolution(fc, state, opts));
+  return proposal;
+}
+
+export function pendingCount(proposal) {
+  return (proposal.file_changes || []).filter((fc) => fc.status === 'pending').length;
 }
 
 // ---------------------------------------------------------------------------
-// Queue sorting (rhiz-review §Queue Panel — Sorting). Manual order is supplied
-// by the caller (drag order); other modes derive from proposal fields.
+// Queue sorting
 // ---------------------------------------------------------------------------
 
 function importanceRank(proposal) {
-  // An agent- or reviewer-applied importance tag of the form importance:<n>
-  // or a bare severity word. Higher = more important. Untagged sort last.
   const tags = proposal.tags || [];
   const num = tags.map((t) => /^importance:(\d+)$/.exec(t)).find(Boolean);
   if (num) return Number(num[1]);

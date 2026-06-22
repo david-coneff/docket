@@ -916,3 +916,49 @@ single right answer). Tagging and filtering let the user choose when to
 invoke the full cycle vs. when to use docket as a lightweight review tool.
 
 ---
+
+## Shared UI/UX Layer — `rootstock` (decided 2026-06-22)
+
+docket, tessel, and other apps in this family repeatedly re-fix the same
+*modular UI* bugs — focus loss on re-render, theme-unaware components
+(white-on-grey pills), pane/dock behavior, single-file build packaging — none
+of which are about any one app's domain. Today docket's UI shell is a hand
+*copy* of tessel's patterns, so every shared fix has to be re-ported by hand
+and drifts out of sync.
+
+**Decision:** extract the shared, domain-agnostic UI/UX layer into its own
+dedicated repository, **`rootstock`**, consumed as a package by docket, tessel,
+broodforge, and future apps. Central fixes then flow to every app at once.
+
+**Scope of `rootstock`** (the reusable shell, no app domain logic):
+- ThemeManager + the full CSS-var token contract + A/B theme pill
+- Top-level menu / toolbar + dropdown system
+- Dockable / undockable / floating / collapsible pane system
+- Theme-aware primitives: buttons, tag/chip pills, form controls, badges,
+  scrollbars, focus rings — all referencing tokens, never hardcoded colors
+- StorageEngine, icon factory, the `el()` DOM helper
+
+**Sequencing — hybrid (stabilize in tessel, then mirror, then extract):**
+1. Treat **tessel** as the canonical source of the shared patterns.
+2. **Mirror** docket's shared UI to match tessel exactly so the two are aligned
+   where shared (in progress: token contract, tinted theme-aware chips,
+   semantic status tokens, focus convention, theme-pill behavior).
+3. **Extract** the aligned baseline into `rootstock`; switch tessel and docket
+   to consume it. Decide distribution (npm workspace / package / submodule) at
+   extraction time.
+
+**Token contract (mirrored from tessel):** `--bg`, `--surface`, `--surface2`,
+`--border`, `--text`, `--muted`, `--accent`, `--accent-text`, `--field-bg`,
+`--field-border`; semantic status tokens kept constant in `:root`
+(`--green`, `--gold`, `--orange`, `--red`, `--info`). Rule: any colored
+background pairs with a matching foreground token (`--accent` → `--accent-text`;
+tinted chips use a translucent hue tint + `--text`). Never literal
+white-on-grey.
+
+**Still to mirror before extraction:** the dock/floating-pane system
+(PaneFactory / DockSystem / FloatingPane) — docket currently uses a static
+CSS-grid three-panel layout; tessel uses flex dock zones with
+collapse/float/PiP. This is the largest remaining gap and is best ported as
+part of standing up `rootstock` rather than bolted onto docket's grid.
+
+---

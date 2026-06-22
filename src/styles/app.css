@@ -49,7 +49,8 @@ button.btn.primary { background: var(--accent); color: var(--accent-text); borde
 button.btn:disabled { opacity: 0.5; cursor: not-allowed; }
 button.btn.sm { padding: 3px 8px; font-size: 12px; }
 button.btn.icon-btn { padding: 5px 8px; }
-button.btn.reconnect-btn { background: #7c4dff22; border-color: #7c4dff; color: var(--accent); font-weight: 600; }
+button.btn.reconnect-btn { background: color-mix(in srgb, var(--accent) 15%, transparent);
+  border-color: var(--accent); color: var(--accent); font-weight: 600; }
 
 /* Theme pill ------------------------------------------------------------ */
 .theme-pill {
@@ -58,15 +59,20 @@ button.btn.reconnect-btn { background: #7c4dff22; border-color: #7c4dff; color: 
 }
 .theme-pill-slider {
   position: absolute; top: 0; bottom: 0; background: var(--accent);
-  border-radius: 999px; transition: left 0.15s ease, width 0.15s ease;
-  z-index: 0;
+  border-radius: 999px; z-index: 0;
+  transition: left 0.18s cubic-bezier(.4,0,.2,1), width 0.18s cubic-bezier(.4,0,.2,1);
 }
 .theme-pill-btn {
   position: relative; z-index: 1; padding: 3px 10px;
-  background: none; border: none; color: var(--text); cursor: pointer;
+  background: none; border: none; color: var(--muted); cursor: pointer;
   font-size: 11px; font-weight: 600; border-radius: 999px;
 }
+.theme-pill-btn:hover { color: var(--text); }
 .theme-pill-btn.active { color: var(--accent-text); }
+
+/* Focus convention (tessel): no native ring; accent border/underline instead. */
+input:focus, textarea:focus, select:focus { outline: none; border-color: var(--accent); }
+.tabs button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 
 /* Three panels ---------------------------------------------------------- */
 .panels { display: grid; grid-template-columns: 240px 1fr 320px; flex: 1; min-height: 0; }
@@ -80,11 +86,11 @@ button.btn.reconnect-btn { background: #7c4dff22; border-color: #7c4dff; color: 
 .queue-item { padding: 8px; border: 1px solid var(--border); border-radius: var(--radius);
   margin-bottom: 8px; cursor: pointer; background: var(--bg); }
 .queue-item.active { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
-.queue-item.ready { border: 1.5px dashed #22c55e; }
-.queue-item.active.ready { border-style: solid; border-color: #22c55e; box-shadow: 0 0 0 1px #22c55e; }
+.queue-item.ready { border: 1.5px dashed var(--green); }
+.queue-item.active.ready { border-style: solid; border-color: var(--green); box-shadow: 0 0 0 1px var(--green); }
 .queue-item-header { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
 .queue-item-header .qtitle { font-weight: 600; flex: 1; }
-.ready-badge { font-size: 11px; color: #22c55e; font-weight: 700; flex-shrink: 0; }
+.ready-badge { font-size: 11px; color: var(--green); font-weight: 700; flex-shrink: 0; }
 .queue-item .qmeta { font-size: 11px; color: var(--muted); }
 .queue-item[draggable="true"] { cursor: grab; }
 .sort-row { display: flex; gap: 6px; align-items: center; margin-bottom: 10px; }
@@ -115,12 +121,12 @@ button.btn.reconnect-btn { background: #7c4dff22; border-color: #7c4dff; color: 
 .file-item:hover { background: var(--surface2); }
 .file-item.active { border-left: 2px solid var(--accent); background: var(--surface2); }
 .file-status-icon { font-size: 13px; flex-shrink: 0; }
-.file-status-icon[data-status="approved"] { color: #22c55e; }
-.file-status-icon[data-status="approved-working-draft"] { color: #22c55e; }
-.file-status-icon[data-status="edited-commit-as-is"] { color: #22c55e; }
-.file-status-icon[data-status="edited-for-agent"] { color: #f59e0b; }
-.file-status-icon[data-status="changes-requested"] { color: #f97316; }
-.file-status-icon[data-status="rejected"] { color: #ef4444; }
+.file-status-icon[data-status="approved"] { color: var(--green); }
+.file-status-icon[data-status="approved-working-draft"] { color: var(--green); }
+.file-status-icon[data-status="edited-commit-as-is"] { color: var(--green); }
+.file-status-icon[data-status="edited-for-agent"] { color: var(--gold); }
+.file-status-icon[data-status="changes-requested"] { color: var(--orange); }
+.file-status-icon[data-status="rejected"] { color: var(--red); }
 .file-path { font-family: var(--mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .file-rationale {
   font-style: italic; background: var(--surface2);
@@ -167,13 +173,21 @@ button.btn.reconnect-btn { background: #7c4dff22; border-color: #7c4dff; color: 
 .collapsible-body { padding: 10px; }
 
 .tag-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+/* Tinted, theme-aware chips (tessel convention): a translucent tint of the
+   category hue as background with themed text + a category-hued border, so a
+   chip is readable in every theme — never white-on-grey. The category color is
+   carried in --chip-color and mixed into bg/border via color-mix. */
 .chip { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 999px;
-  font-size: 12px; color: #fff; background: var(--rhiz-tag-neutral); }
-.chip.bug-lifecycle { background: var(--rhiz-tag-bug); }
-.chip.hypothesis { background: var(--rhiz-tag-hypothesis); }
-.chip.prose-governance { background: var(--rhiz-tag-prose); }
-.chip.process { background: var(--rhiz-tag-process); }
-.chip .x { cursor: pointer; opacity: 0.8; }
+  font-size: 12px; color: var(--text);
+  --chip-color: var(--rhiz-tag-neutral);
+  background: color-mix(in srgb, var(--chip-color) 18%, transparent);
+  border: 1px solid color-mix(in srgb, var(--chip-color) 55%, transparent); }
+.chip.bug-lifecycle { --chip-color: var(--rhiz-tag-bug); }
+.chip.hypothesis { --chip-color: var(--rhiz-tag-hypothesis); }
+.chip.prose-governance { --chip-color: var(--rhiz-tag-prose); }
+.chip.process { --chip-color: var(--rhiz-tag-process); }
+.chip .x { cursor: pointer; opacity: 0.7; }
+.chip .x:hover { opacity: 1; }
 .tag-add { display: flex; gap: 4px; margin-top: 6px; }
 .tag-add input { flex: 1; background: var(--field-bg); color: var(--text); border: 1px solid var(--field-border); border-radius: 4px; padding: 3px 6px; }
 .mutex-warn { color: var(--del-fg); font-size: 12px; margin-top: 4px; }
@@ -205,7 +219,7 @@ textarea.feedback { width: 100%; min-height: 80px; background: var(--field-bg); 
   padding: 8px; border-radius: var(--radius); border: 1px solid var(--border); }
 .lint-gate.clean { color: var(--ins-fg); flex-direction: row; align-items: center; gap: 6px; }
 .lint-gate .err { display: flex; align-items: center; gap: 5px; color: var(--del-fg); }
-.lint-gate .warn { display: flex; align-items: center; gap: 5px; color: #b8860b; }
+.lint-gate .warn { display: flex; align-items: center; gap: 5px; color: var(--gold); }
 
 /* Flash message --------------------------------------------------------- */
 .flash-msg {

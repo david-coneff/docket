@@ -26,6 +26,14 @@
   --rev-del-bg: #2e2440;
   --rev-del-fg: #c08cff;
 
+  /* Semantic status tokens — constant across themes (tessel convention).
+     ThemeManager does not override these, so they persist under every theme. */
+  --green: #3fb950;
+  --gold: #d29922;
+  --orange: #f97316;
+  --red: #ef4444;
+  --info: #6ea8fe;
+
   /* Tag taxonomy */
   --rhiz-tag-bug: #d1495b;
   --rhiz-tag-hypothesis: #8338ec;

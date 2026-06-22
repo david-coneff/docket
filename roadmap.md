@@ -551,3 +551,288 @@ All open questions are now resolved. No blockers to implementation.
 
 7. **Phase 7 (if needed) — Tauri native app**: Auto-load folder on launch,
    auto-save resolved JSON, direct agent CLI invocation.
+
+---
+
+## Evolution: Web Service with Server-Side Claude CLI Integration (Phase 8+)
+
+The current docket architecture is desktop-first — the user operates the UI on
+their local machine and the proposal artifacts stay in git. A future evolution
+would integrate docket with a backend web service to create a cohesive
+human-Claude feedback loop, where human judgment and agent action are tightly
+coupled and traceable.
+
+### Vision: Structured Lifecycle for Agent-Driven Change
+
+**Current cycle** (docket phases 1–7):
+```
+Agent proposes (JSON) → Human reviews (UI) → Human disposes → Human applies
+                       (feedback in JSON)     (approves/rejects)     (commits)
+```
+
+**Proposed cycle** (Phase 8+):
+```
+Proposal → Human feedback/disposition → Claude acts → Structured result artifact
+         (judgment gate)                (execution)   (status, notes, commit hash)
+                                                      ↓
+                                         Enables human confirmation:
+                                         "Did the fix work?" → new proposal
+                                         (closes hypothesis loop)
+```
+
+### Phase 8 — Web Backend + Server-Side Claude CLI Integration
+
+**Infrastructure:**
+- Web-based docket UI served from a backend server (localhost or cloud-hosted)
+- Server provisions dedicated repository clones and a Claude CLI instance
+  per user session or workspace
+- User maintains single URL entry point; repositories and CLI are provisioned
+  server-side
+
+**Disposition → Action flow:**
+1. User approves or disposes a hunk in the docket UI (browser)
+2. UI writes disposition to `dispositioned.json` in the working repo
+3. Server detects file change (inotify or polling)
+4. Server invokes Claude CLI against the repository with the proposal + disposition
+5. Claude reads the proposal JSON, the `reviewer_edit` fields, and feedback
+6. Claude performs the action (commits, updates files, runs tests, etc.)
+7. Claude writes result artifact (`actioned.json`) with:
+   - `status`: "success" | "partial" | "failed"
+   - `summary`: Brief description of action taken
+   - `git_commit`: Hash of committed changes (if applicable)
+   - `timestamp`: ISO-8601 completion time
+   - `output`: Execution logs, test results, or error messages
+8. Server detects result artifact and notifies UI
+9. User sees closure: "This disposition was actioned on 2026-06-22T14:30:00Z
+   (commit abc1234). Summary: …"
+
+**Result artifact schema** (`dispositioned.json` → `actioned.json`):
+```json
+{
+  "proposal_id": "prop-2026-06-21-001",
+  "disposition_id": "disp-001",
+  "status": "success",
+  "timestamp": "2026-06-22T14:30:00Z",
+  "git_commit": "abc1234567890abcdef1234567890abcdef123456",
+  "summary": "Applied approved changes to tauri-window-management.md; no linting errors.",
+  "actions_taken": [
+    {
+      "hunk_id": "hunk-01",
+      "action": "commit",
+      "file": "rhiz-memory/state/failure-paths/tauri-window-management.md",
+      "commit_msg": "docs: add F-WIN-05 satellite focus race scenario"
+    }
+  ],
+  "notes": "All linting gates passed. No blocking issues detected.",
+  "logs": {
+    "lint_output": "…",
+    "test_output": "…",
+    "agent_notes": "…"
+  }
+}
+```
+
+### Phase 9 — Closed Feedback Loop & Hypothesis Confirmation
+
+**Extending the lifecycle to include confirmation:**
+
+Once an action is complete (result artifact written), the user can propose
+a follow-up:
+- "I deployed the fix. Here are the production logs."
+- "I ran the test suite and here's the output."
+- "The hypothesis was incorrect; we need to revisit."
+
+Each follow-up is a new proposal that references the prior one:
+```json
+{
+  "id": "prop-2026-06-22-001",
+  "title": "Confirm: satellite focus fix resolves race condition",
+  "parent_proposal": "prop-2026-06-21-001",
+  "parent_action": "disp-001",
+  "tags": ["confirmation", "user-tested"],
+  "agent_notes": "User reports: ran test_multi_monitor.py in isolation 50x, no failures. Deployed to staging.",
+  "evidence": [
+    { "type": "log_file", "path": "test-run-2026-06-22.log" },
+    { "type": "note", "text": "Test passed in isolation but need to verify under real load." }
+  ]
+}
+```
+
+Claude can then analyze the evidence and confirm or refute the hypothesis:
+- **Confirmed**: `actioned.json` status = "confirmed"; tags the original proposal as `hypothesis-confirmed`
+- **Refuted**: Creates a new proposal based on the new evidence; cycle restarts
+- **Partial**: Status = "partial-success"; suggests refinements in `summary`
+
+This closes the loop: proposal → feedback → action → evidence → confirmation
+(or pivot to new hypothesis).
+
+### Comparison: Why This Pattern
+
+**vs. GitHub Issues** — Issues are freeform discussion. Without structured
+disposition states and result artifacts, there's no clear "human approved →
+agent executed → human confirmed" boundary. The feedback loop is implicit and
+must be manually tracked across comments.
+
+**vs. ADRs/RFCs** — Good for documenting architectural decisions and rationale.
+But they are typically written *after* a decision is made and do not include
+an agent-driven execution phase or result feedback loop. They also do not
+capture the iterative hypothesis-test-confirm cycle.
+
+**vs. Linear/Jira** — Issue tracking with custom fields and automation rules.
+However, these tools are designed for human-to-human workflow coordination,
+not human-agent feedback loops. They also do not naturally support hypothesis
+testing with structured confirmation artifacts.
+
+**vs. Git commit history** — Commits are immutable and include messages, but
+the qualitative notes about *why* a change was proposed, *how* the human
+evaluated it, and *whether* it solved the problem are lost or relegated to
+commit message prose (which does not parse well in code review). docket
+proposes structured artifacts at each stage.
+
+**vs. Codeium experiment tracking** — Some AI tools log experiments and results.
+However, they typically focus on model/data pipeline trials, not decision
+cycles in text or qualitative domains. docket is domain-agnostic.
+
+**vs. Langchain experiment tracking** — Similar to Codeium; good for tracking
+agent tool use and token counts, but not designed for human-agent decision
+loops with structured disposition states.
+
+**Unique aspects of docket's approach:**
+
+1. **Structured disposition gate** — Not every proposal is auto-executed. The
+   human explicitly disposes it (approve, request changes, edit, reject),
+   creating a clear boundary between judgment and action.
+
+2. **Immutable feedback artifacts** — The reviewer's edits, comments, and
+   disposition are all recorded alongside the proposal, creating an
+   audit trail.
+
+3. **Agent-readble feedback** — The `reviewer_edit`, `reviewer_edit_mode`,
+   and `comments` are designed for Claude to parse and act on, not just for
+   human reading.
+
+4. **Hypothesis closure** — The result artifact enables confirmation: did the
+   fix work? This is rarely captured in traditional tools.
+
+5. **Prose-native** — Designed for qualitative work (articles, design docs,
+   notes) rather than code review. Track-changes and word-level diff are
+   the focus, not line-level code diff.
+
+6. **Artifact lineage** — Each proposal, disposition, action, and result is
+   immutable and linked. The chain of evidence is preserved.
+
+### Implementation considerations for Phase 8+
+
+- **Server architecture**: Minimal web framework (Flask, FastAPI); inotify for
+  file change detection; queue for Claude CLI tasks.
+- **Claude CLI integration**: Each workspace has a dedicated CLI instance;
+  Claude reads proposal JSON and executes against the local repo clone.
+- **Result artifact handling**: Written by Claude CLI; server detects change
+  and notifies UI via WebSocket or polling.
+- **Authentication**: User session tied to a workspace/repo pair; server
+  manages file permissions and isolates workspaces.
+- **Offline fallback**: If server is down, docket still works as a standalone
+  app (read-only on result artifacts; can still disposition proposals that
+  are applied later).
+
+---
+
+## Structured Feedback on the Proposed Lifecycle
+
+The sections above describe a *new* integration opportunity, not a critique of
+existing docket functionality. Here is structured feedback on the proposed
+lifecycle concept itself, comparing it to patterns in current use.
+
+### Pattern analysis: Proposal → Feedback → Disposition → Action → Confirmation
+
+**Strengths:**
+
+1. **Clear state boundaries** — Each phase (proposal, feedback, disposition,
+   action, confirmation) is explicit and auditable. No ambiguity about
+   whether a human has judged the change or whether an action is pending.
+
+2. **Artifact lineage** — Every intermediate stage produces a JSON artifact:
+   proposal (agent), feedback (human + agent), disposition (human),
+   result (agent), confirmation (human + agent). The full chain of reasoning
+   and decisions is preserved.
+
+3. **Hypothesis-driven** — Proposes a fix ("F-WIN-05 race condition") with
+   tags indicating confidence ("hypothetical-fix"). Confirmation phase
+   allows hypothesis to be validated or refuted. This is rare in tools; most
+   just track "done" or "not done."
+
+4. **Qualitative work native** — Designed for prose and qualitative judgment,
+   not code line-level changes. Track-changes and reviewer edits fit the
+   domain better than unified diffs.
+
+5. **Minimal assumptions** — Does not assume agent is infallible or
+   omniscient. Human feedback, re-proposal, and confirmation loop in
+   naturally.
+
+**Challenges:**
+
+1. **Overhead for simple changes** — A one-line typo fix goes through proposal
+   → feedback → disposition → action → confirmation (at least 5 phases).
+   For lightweight changes, this may feel bureaucratic.
+
+   *Mitigations:*
+   - Batch mode: multiple hunks → single disposition → single action.
+   - Auto-approve heuristics: e.g., obvious formatting fixes can auto-approve
+     if no feedback is attached.
+   - Fast-track tags: e.g., `[quick-fix]` → disposition auto-generated.
+
+2. **Broken feedback loop if agent is offline** — If Claude CLI is unavailable,
+   dispositions queue but cannot execute. User is blocked waiting for results.
+
+   *Mitigations:*
+   - Offline queue: dispositions are queued locally; agent executes them
+     when available.
+   - Explicit retry UI: user can see pending dispositions and retry.
+   - Async notifications: server notifies user of results via email/webhook.
+
+3. **Complex for exploratory work** — If the human and agent are exploring
+   ideas (not implementing), the proposal-feedback cycle can become lengthy.
+
+   *Mitigations:*
+   - Tags to distinguish exploratory vs. actionable proposals.
+   - Grouped proposals: e.g., "5 exploratory ideas for improving X"
+     → grouped UI view → single batch disposition.
+
+4. **Result artifact schema must be stable** — If the actioned.json format
+   changes, old actions become harder to parse. Version the schema and
+   provide migrations.
+
+### Comparison to decision record patterns
+
+| Pattern | docket approach | Tradeoff |
+|---|---|---|
+| **ADRs** | docket is more executable (agent acts); ADR is more deliberative (humans decide). | docket requires immediate action readiness; ADR allows long-term documentation. |
+| **RFCs** | docket has tighter human-agent loop; RFC is typically human-to-human. | docket closes feedback faster; RFC builds broader consensus. |
+| **GitHub PR + comments** | docket has explicit disposition states; PR review is implicit. | docket is more structured; PRs are more flexible and informal. |
+| **Issue + labels** | docket is proposal-centric (agent initiates); issues are typically human-initiated. | docket is AI-first; issues are human-first. |
+| **Experiment logs (Codeium)** | docket is qualitative + hypothesis-driven; experiment logs are quantitative + test-driven. | docket is for prose/strategy; experiment logs are for model/data. |
+
+### Recommendation: Hybrid adoption path
+
+**Phase 0 (current):** docket as a standalone review UI, no server integration.
+This is working and valuable. Keep it.
+
+**Phase 8 (future):** Introduce server + Claude CLI integration *only for
+workflows where*:
+- The human has explicitly marked a proposal as actionable (`actionable`
+  tag or explicit checkbox).
+- The disposition is "Approved" (not "Request changes" or "Rejected").
+- The agent CLI is confirmed available and healthy.
+
+This keeps the feedback loop optional and does not require immediate
+infrastructure changes. Lightweight proposals continue to work as today.
+
+**Phase 9 (future):** Add confirmation phase with result artifacts, gating
+the human's ability to close the loop on "Did this fix work?"
+
+**Not recommended:** Requiring all proposals to go through the full lifecycle.
+Some proposals are advisory (no action needed); some are exploratory (no
+single right answer). Tagging and filtering let the user choose when to
+invoke the full cycle vs. when to use docket as a lightweight review tool.
+
+---

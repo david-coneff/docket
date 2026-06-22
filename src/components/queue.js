@@ -1,4 +1,4 @@
-// queue.js — proposal queue with sorting, manual drag-reorder, and multi-select dispose.
+// queue.js — proposal queue with sorting, manual drag-reorder, and multi-select disposition.
 import { el } from '../lib/dom.js';
 import { sortProposals, isProposalReady, pendingCount } from '../lib/resolve.js';
 import { categoryOf } from '../lib/taxonomy.js';
@@ -33,11 +33,7 @@ export function renderQueue(store, onDisposeSelected) {
 
   if (!ordered.length) {
     panel.append(el('div.empty', { text: 'No proposals. Open a working directory.' }));
-    const disposeBtn = el('button.btn.dispose-btn', {
-      text: 'Dispose selected (0)',
-      disabled: true,
-    });
-    panel.append(disposeBtn);
+    panel.append(el('button.btn.dispose-btn', { text: 'Disposition selected (0)', disabled: true }));
     return panel;
   }
 
@@ -58,7 +54,7 @@ export function renderQueue(store, onDisposeSelected) {
     cb.addEventListener('click', (e) => { e.stopPropagation(); store.toggleProposalSelect(d.id); });
 
     const header = el('div.queue-item-header', {}, [cb, el('div.qtitle', { text: d.title || d.id })]);
-    if (ready) header.append(el('span.ready-badge', { text: '✓', title: 'All files resolved — ready to dispose' }));
+    if (ready) header.append(el('span.ready-badge', { text: '✓', title: 'All files resolved — ready to disposition' }));
 
     item.append(header);
     item.append(el('div.qmeta', {
@@ -83,7 +79,7 @@ export function renderQueue(store, onDisposeSelected) {
 
   const selCount = store.selectedProposalIds.size;
   const disposeBtn = el('button.btn.dispose-btn', {
-    text: `Dispose selected (${selCount})`,
+    text: `Disposition selected (${selCount})`,
     disabled: selCount === 0,
     onclick: () => onDisposeSelected([...store.selectedProposalIds]),
   });

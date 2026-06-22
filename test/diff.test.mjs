@@ -2,6 +2,7 @@
 import assert from 'node:assert';
 import {
   tokenizeWords, tokenizeLines, diffWords, diffLines, segment, diffMixed, hasChanges,
+  diffLayered, hasReviewerChanges,
 } from '../src/lib/diff.js';
 
 let pass = 0;
@@ -73,6 +74,27 @@ t('diffMixed falls back to line diff on structural change', () => {
   const ops = diffMixed(before, after);
   assert.equal(ops.filter(o => o.type !== 'ins').map(o => o.text).join(''), before);
   assert.equal(ops.filter(o => o.type !== 'del').map(o => o.text).join(''), after);
+});
+
+t('diffLayered attributes agent and reviewer changes distinctly', () => {
+  // agent: insert "big"; reviewer: change "cat" -> "dog"
+  const ops = diffLayered('the cat sat', 'the big cat sat', 'the big dog sat', 'word');
+  assert.ok(ops.some(o => o.type === 'ins' && o.layer === 'agent' && o.text.includes('big')));
+  assert.ok(ops.some(o => o.type === 'del' && o.layer === 'reviewer' && o.text.includes('cat')));
+  assert.ok(ops.some(o => o.type === 'ins' && o.layer === 'reviewer' && o.text.includes('dog')));
+  assert.ok(hasReviewerChanges(ops));
+});
+
+t('diffLayered reconstructs the effective (edit) text from equal+ins', () => {
+  const before = 'one two three', after = 'one two THREE four', edit = 'one TWO THREE four';
+  const ops = diffLayered(before, after, edit, 'word');
+  assert.equal(ops.filter(o => o.type !== 'del').map(o => o.text).join(''), edit);
+});
+
+t('diffLayered with no reviewer edit reports no reviewer changes', () => {
+  const ops = diffLayered('a cat', 'a big cat', 'a big cat', 'word');
+  assert.equal(hasReviewerChanges(ops), false);
+  assert.ok(ops.some(o => o.type === 'ins' && o.layer === 'agent'));
 });
 
 console.log(`\n${pass} assertions passed.`);

@@ -15,11 +15,16 @@
   --field-bg: #252a42;
   --field-border: #3d5299;
 
-  /* Diff colors */
+  /* Diff colors — agent layer (before→after) */
   --ins-bg: #12331c;
   --ins-fg: #3fb950;
   --del-bg: #3a1417;
   --del-fg: #f85149;
+  /* Diff colors — reviewer layer (after→reviewer_edit), distinct hue */
+  --rev-ins-bg: #1e2a4a;
+  --rev-ins-fg: #6ea8fe;
+  --rev-del-bg: #2e2440;
+  --rev-del-fg: #c08cff;
 
   /* Tag taxonomy */
   --rhiz-tag-bug: #d1495b;
@@ -36,3 +41,5 @@
 
 del { background: var(--del-bg); color: var(--del-fg); text-decoration: line-through; }
 ins { background: var(--ins-bg); color: var(--ins-fg); text-decoration: none; }
+ins.rev { background: var(--rev-ins-bg); color: var(--rev-ins-fg); text-decoration: none; }
+del.rev { background: var(--rev-del-bg); color: var(--rev-del-fg); text-decoration: line-through; }

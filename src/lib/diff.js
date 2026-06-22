@@ -23,8 +23,11 @@ export function tokenizeLines(text) {
  * LCS diff over two token arrays. Returns ops in order.
  * Uses the standard dynamic-programming LCS table. Token arrays here are
  * bounded (single knowledge articles), so O(n*m) is acceptable.
+ *
+ * Pass { coalesce: false } to get one op per token (needed for attribution
+ * walks, where each non-deletion op must map to exactly one `b` token).
  */
-export function lcsDiff(a, b) {
+export function lcsDiff(a, b, { coalesce: doCoalesce = true } = {}) {
   const n = a.length;
   const m = b.length;
   // DP table of LCS lengths.
@@ -49,7 +52,7 @@ export function lcsDiff(a, b) {
   }
   while (i < n) ops.push({ type: 'del', text: a[i++] });
   while (j < m) ops.push({ type: 'ins', text: b[j++] });
-  return coalesce(ops);
+  return doCoalesce ? coalesce(ops) : ops;
 }
 
 /** Merge runs of same-type ops into single ops for compact rendering. */
@@ -135,4 +138,74 @@ export function diffMixed(before, after) {
 /** True when the diff contains any insertion or deletion. */
 export function hasChanges(ops) {
   return ops.some((o) => o.type !== 'equal');
+}
+
+/** Merge adjacent ops sharing the same type AND layer. */
+function coalesceLayered(ops) {
+  const out = [];
+  for (const op of ops) {
+    const last = out[out.length - 1];
+    if (last && last.type === op.type && last.layer === op.layer) last.text += op.text;
+    else out.push({ ...op });
+  }
+  return out;
+}
+
+/**
+ * Two-layer attributed diff: agent (before→after) and reviewer (after→edit),
+ * reconciled over `after` as the shared spine. Returns a flat op list of
+ * { type:'equal'|'del'|'ins', layer:'agent'|'reviewer'|null, text }.
+ *
+ * Net effect rules:
+ *  - tokens the reviewer removed render as reviewer `del` (even if the agent
+ *    had inserted them — the net result is that they are gone);
+ *  - tokens the reviewer added render as reviewer `ins`;
+ *  - surviving agent insertions render as agent `ins`;
+ *  - tokens the agent removed render as agent `del`.
+ *
+ * `granularity` is 'word' or 'line' (mixed/auto maps to word here, since the
+ * three-way spine alignment needs a single uniform tokenization).
+ */
+export function diffLayered(before, after, edit, granularity = 'word') {
+  const tok = granularity === 'line' ? tokenizeLines : tokenizeWords;
+  const B = tok(before), M = tok(after), E = tok(edit);
+
+  const agentOps = lcsDiff(B, M, { coalesce: false });
+  const reviewerOps = lcsDiff(M, E, { coalesce: false });
+
+  // Attribution arrays over the `after` spine (length M.length).
+  const mAgent = new Array(M.length).fill('equal');     // 'equal' | 'ins'
+  const mReviewer = new Array(M.length).fill('equal');  // 'equal' | 'del'
+  const agentDelBefore = Array.from({ length: M.length + 1 }, () => []);
+  const reviewerInsBefore = Array.from({ length: M.length + 1 }, () => []);
+
+  let k = 0;
+  for (const op of agentOps) {
+    if (op.type === 'del') agentDelBefore[k].push(op.text);
+    else { if (op.type === 'ins') mAgent[k] = 'ins'; k++; }
+  }
+  k = 0;
+  for (const op of reviewerOps) {
+    if (op.type === 'ins') reviewerInsBefore[k].push(op.text);
+    else { if (op.type === 'del') mReviewer[k] = 'del'; k++; }
+  }
+
+  const ops = [];
+  const flush = (texts, type, layer) => {
+    for (const text of texts) ops.push({ type, layer, text });
+  };
+  for (let idx = 0; idx <= M.length; idx++) {
+    flush(agentDelBefore[idx], 'del', 'agent');
+    flush(reviewerInsBefore[idx], 'ins', 'reviewer');
+    if (idx === M.length) break;
+    if (mReviewer[idx] === 'del') ops.push({ type: 'del', layer: 'reviewer', text: M[idx] });
+    else if (mAgent[idx] === 'ins') ops.push({ type: 'ins', layer: 'agent', text: M[idx] });
+    else ops.push({ type: 'equal', layer: null, text: M[idx] });
+  }
+  return coalesceLayered(ops);
+}
+
+/** True when the layered op list contains any reviewer-attributed change. */
+export function hasReviewerChanges(ops) {
+  return ops.some((o) => o.layer === 'reviewer');
 }

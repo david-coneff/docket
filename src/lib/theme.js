@@ -9,6 +9,8 @@ const THEMES = [
     '--field-bg': '#252a42', '--field-border': '#3d5299',
     '--ins-bg': '#12331c', '--ins-fg': '#3fb950',
     '--del-bg': '#3a1417', '--del-fg': '#f85149',
+    '--rev-ins-bg': '#1e2a4a', '--rev-ins-fg': '#6ea8fe',
+    '--rev-del-bg': '#2e2440', '--rev-del-fg': '#c08cff',
   }},
   { id: 'light', name: 'Light', vars: {
     '--bg': '#f0f0f2', '--surface': '#ffffff', '--surface2': '#e8e9ec',
@@ -17,6 +19,8 @@ const THEMES = [
     '--field-bg': '#eef2ff', '--field-border': '#c7d2fe',
     '--ins-bg': '#e3f7e8', '--ins-fg': '#1a7f37',
     '--del-bg': '#fceaea', '--del-fg': '#b22222',
+    '--rev-ins-bg': '#e2ecff', '--rev-ins-fg': '#1d4ed8',
+    '--rev-del-bg': '#f0e6ff', '--rev-del-fg': '#7c3aed',
   }},
   { id: 'nord', name: 'Nord', vars: {
     '--bg': '#2e3440', '--surface': '#3b4252', '--surface2': '#434c5e',
@@ -25,6 +29,8 @@ const THEMES = [
     '--field-bg': '#3b4f6b', '--field-border': '#5e81ac',
     '--ins-bg': '#1a3a2a', '--ins-fg': '#a3be8c',
     '--del-bg': '#3a1a1a', '--del-fg': '#bf616a',
+    '--rev-ins-bg': '#2a3b54', '--rev-ins-fg': '#81a1c1',
+    '--rev-del-bg': '#3b2e4d', '--rev-del-fg': '#b48ead',
   }},
   { id: 'warm-light', name: 'Warm Light', vars: {
     '--bg': '#faf8f3', '--surface': '#fffefb', '--surface2': '#f0ece3',
@@ -33,6 +39,8 @@ const THEMES = [
     '--field-bg': '#fef3e2', '--field-border': '#e0c090',
     '--ins-bg': '#e8f5e0', '--ins-fg': '#5a7a3a',
     '--del-bg': '#fceaea', '--del-fg': '#8b3a3a',
+    '--rev-ins-bg': '#e4ecfa', '--rev-ins-fg': '#3a5a9c',
+    '--rev-del-bg': '#efe6f7', '--rev-del-fg': '#7a4fa0',
   }},
   { id: 'high-contrast', name: 'High Contrast', vars: {
     '--bg': '#000000', '--surface': '#0d0d0d', '--surface2': '#1a1a1a',
@@ -41,6 +49,8 @@ const THEMES = [
     '--field-bg': '#001a33', '--field-border': '#4499ff',
     '--ins-bg': '#003300', '--ins-fg': '#00ff00',
     '--del-bg': '#330000', '--del-fg': '#ff4444',
+    '--rev-ins-bg': '#001a4d', '--rev-ins-fg': '#33aaff',
+    '--rev-del-bg': '#2a004d', '--rev-del-fg': '#cc66ff',
   }},
 ];
 

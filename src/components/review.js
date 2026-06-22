@@ -1,6 +1,6 @@
 // review.js — center panel: file list + Composed / Review mode / Edit ✎ tabs.
 import { el } from '../lib/dom.js';
-import { renderDiff } from '../lib/diffRender.js';
+import { renderDiff, renderLayeredDiff } from '../lib/diffRender.js';
 import { renderMarkdown } from '../lib/markdown.js';
 import { saveDraft, loadDraft } from '../lib/store.js';
 import { STATE_ICON, STATE_LABEL, bulkApply, STATES } from '../lib/resolve.js';
@@ -75,15 +75,38 @@ export function renderReview(store, onChange, onBulkResolve) {
   }
   panel.append(tabs);
 
+  const effective = effectiveContent(fc);
+  const hasReviewerEdit = effective !== (fc.after ?? '');
+
   if (reviewUI.tab === 'composed') {
-    panel.append(el('div.content-view', { html: renderMarkdown(fc.after || '') }));
+    // The Composed view shows the *effective* committed result — the reviewer's
+    // edit when present, otherwise the agent's proposal — so edits transfer.
+    panel.append(el('div.content-view', { html: renderMarkdown(effective) }));
+    if (hasReviewerEdit) {
+      panel.append(el('div.edit-legend', {}, [
+        el('span.legend-swatch.rev-swatch'),
+        el('span', { text: 'Includes your edits. Switch to Review mode to see them highlighted in context.' }),
+      ]));
+    }
   } else if (reviewUI.tab === 'review') {
     const gran = el('select', { value: reviewUI.granularity,
       onchange: (e) => { reviewUI.granularity = e.target.value; onChange(); } },
       ['auto', 'word', 'line'].map((g) =>
         el('option', { value: g, selected: g === reviewUI.granularity, text: g })));
-    panel.append(el('div.edit-toolbar', {}, [el('span', { text: 'Granularity:' }), gran]));
-    const { html } = renderDiff(fc.before || '', fc.after || '', reviewUI.granularity);
+    const toolbar = el('div.edit-toolbar', {}, [el('span', { text: 'Granularity:' }), gran]);
+    if (hasReviewerEdit) {
+      toolbar.append(
+        el('span.legend-swatch.agent-swatch'), el('span.legend-label', { text: 'agent' }),
+        el('span.legend-swatch.rev-swatch'), el('span.legend-label', { text: 'your edits' }),
+      );
+    }
+    panel.append(toolbar);
+    // Layered view attributes agent changes (before→after) and reviewer changes
+    // (after→effective) in distinct colors. With no reviewer edit it collapses
+    // to the plain before→after diff.
+    const { html } = hasReviewerEdit
+      ? renderLayeredDiff(fc.before || '', fc.after || '', effective, reviewUI.granularity)
+      : renderDiff(fc.before || '', fc.after || '', reviewUI.granularity);
     panel.append(el('div.diff-view', { html }));
   } else {
     renderEditTab(panel, store, fc, onChange);
@@ -122,6 +145,12 @@ function renderEditTab(panel, store, fc, onChange) {
     diffBox.innerHTML = changed ? html : '<em>No changes relative to the agent\'s proposal.</em>';
   };
   if (reviewUI.diffMyEdits) { refreshDiff(); panel.append(diffBox); }
+}
+
+// The content that would actually be committed for this file: the reviewer's
+// in-progress edit if any, else a saved reviewer_edit, else the agent's after.
+export function effectiveContent(fc) {
+  return reviewUI.editValue ?? fc.reviewer_edit ?? fc.after ?? '';
 }
 
 export function currentEditValue(fc) {

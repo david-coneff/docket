@@ -142,6 +142,12 @@ button.btn.reconnect-btn { background: #7c4dff22; border-color: #7c4dff; color: 
   line-height: 1.5; background: var(--surface2); color: var(--text); border: 1px solid var(--border);
   border-radius: var(--radius); padding: 12px; resize: vertical; }
 .edit-toolbar { display: flex; gap: 10px; align-items: center; margin-bottom: 8px; }
+.legend-swatch { display: inline-block; width: 12px; height: 12px; border-radius: 3px; vertical-align: middle; }
+.legend-swatch.agent-swatch { background: var(--ins-bg); border: 1px solid var(--ins-fg); }
+.legend-swatch.rev-swatch { background: var(--rev-ins-bg); border: 1px solid var(--rev-ins-fg); }
+.legend-label { font-size: 12px; color: var(--muted); margin-left: 2px; }
+.edit-legend { display: flex; align-items: center; gap: 8px; margin-top: 8px; font-size: 12px; color: var(--muted); }
+.edit-legend .legend-swatch { margin-right: 2px; }
 
 /* Context + Feedback ---------------------------------------------------- */
 .status-row { margin-bottom: 10px; }

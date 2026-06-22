@@ -132,13 +132,23 @@ function render() {
 
   syncTransient();
   clear(root);
-  root.append(renderMenubar(store, actions));
-  root.append(renderToolbar(store, actions));
+  // Render each region defensively: a failure in one component should surface
+  // an inline error rather than blanking the entire interface.
+  const safe = (label, fn) => {
+    try { return fn(); }
+    catch (err) {
+      console.error(`[docket] ${label} failed to render:`, err);
+      return el('div.render-error', { text: `${label} failed: ${err && err.message || err}` });
+    }
+  };
+
+  root.append(safe('Menubar', () => renderMenubar(store, actions)));
+  root.append(safe('Toolbar', () => renderToolbar(store, actions)));
 
   const panels = el('div.panels');
-  panels.append(renderQueue(store, actions.disposeSelected));
-  panels.append(renderReview(store, render, actions.onBulkResolve));
-  panels.append(renderContextFeedback(store, actions.onResolve, render));
+  panels.append(safe('Queue', () => renderQueue(store, actions.disposeSelected)));
+  panels.append(safe('Review', () => renderReview(store, render, actions.onBulkResolve)));
+  panels.append(safe('Context/Feedback', () => renderContextFeedback(store, actions.onResolve, render)));
   root.append(panels);
 
   if (flashMsg) {

@@ -23,8 +23,10 @@ export function renderMenubar(store, actions) {
   });
   document.addEventListener('click', (e) => { if (!fileItem.contains(e.target)) hide(); });
   bar.append(fileItem);
-  bar.append(el('span.app-name', { text: 'docket' }));
   bar.append(el('span.menubar-spacer'));
+  // Right-aligned, following tessel's convention: app name then theme toggle
+  // (toggle rightmost).
+  bar.append(el('span.app-name', { text: 'docket' }));
   bar.append(renderThemePill());
   return bar;
 }

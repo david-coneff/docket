@@ -23,6 +23,18 @@ const REGISTRY = {
   'skip': SkipForward, 'list-checks': ListChecks, 'layers': Layers,
 };
 
+// Lucide named exports may be either a flat list of child nodes
+// (`[[tag, attrs], ...]`) or a full node (`[tag, attrs, children]`). Normalize
+// to a flat list of [tag, attrs] child pairs, ignoring a wrapping 'svg' node.
+function childNodes(iconData) {
+  if (!Array.isArray(iconData)) return [];
+  // Full node form: ['svg', attrs, [children...]]
+  if (typeof iconData[0] === 'string' && Array.isArray(iconData[2])) {
+    return iconData[2];
+  }
+  return iconData;
+}
+
 function buildSvg(iconData, size) {
   const svg = document.createElementNS(SVG_NS, 'svg');
   svg.setAttribute('xmlns', SVG_NS);
@@ -34,17 +46,29 @@ function buildSvg(iconData, size) {
   svg.setAttribute('stroke-linecap', 'round');
   svg.setAttribute('stroke-linejoin', 'round');
   svg.setAttribute('aria-hidden', 'true');
-  for (const [tag, attrs] of iconData) {
-    const el = document.createElementNS(SVG_NS, tag);
-    for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, String(v));
-    svg.appendChild(el);
+  for (const node of childNodes(iconData)) {
+    if (!Array.isArray(node)) continue;
+    const [tag, attrs] = node;
+    if (typeof tag !== 'string') continue;
+    const elem = document.createElementNS(SVG_NS, tag);
+    if (attrs && typeof attrs === 'object') {
+      for (const [k, v] of Object.entries(attrs)) elem.setAttribute(k, String(v));
+    }
+    svg.appendChild(elem);
   }
   return svg;
 }
 
 export function icon(name, size = 16) {
   const data = REGISTRY[name];
-  if (data) return buildSvg(data, size);
+  if (data) {
+    try {
+      const svg = buildSvg(data, size);
+      if (svg.childNodes.length) return svg;
+    } catch (err) {
+      console.warn(`[docket] icon("${name}") failed to build:`, err);
+    }
+  }
   const svg = document.createElementNS(SVG_NS, 'svg');
   svg.setAttribute('width', size); svg.setAttribute('height', size);
   svg.setAttribute('viewBox', '0 0 24 24'); svg.setAttribute('aria-hidden', 'true');

@@ -25,8 +25,9 @@ body { font-family: var(--sans); background: var(--bg); color: var(--text); font
 }
 .menubar .dropdown button:hover { background: var(--surface2); }
 .menubar .sep { height: 1px; background: var(--border); margin: 4px 0; }
-.app-name { margin-left: 6px; color: var(--muted); font-size: 12px; }
+.app-name { margin-right: 10px; color: var(--muted); font-size: 12px; font-weight: 600; letter-spacing: 0.5px; }
 .menubar-spacer { flex: 1; }
+.render-error { margin: 10px; padding: 8px 12px; border: 1px solid var(--del-fg); border-radius: var(--radius); background: var(--del-bg); color: var(--del-fg); font-size: 13px; }
 
 .toolbar {
   display: flex; align-items: center; gap: 8px; flex-wrap: wrap;

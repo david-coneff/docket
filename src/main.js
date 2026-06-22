@@ -95,7 +95,7 @@ const actions = {
     }
     store.selectedProposalIds.clear();
     const msgs = [];
-    if (ready.length) msgs.push(`Disposed ${ready.length} proposal(s).`);
+    if (ready.length) msgs.push(`Dispositioned ${ready.length} proposal(s).`);
     if (notReady.length) {
       msgs.push(`${notReady.length} proposal(s) skipped — still have pending files:`);
       notReady.forEach((d) => { const n = pendingCount(d); msgs.push(`  • ${d.title || d.id} (${n} file(s) pending)`); });
@@ -108,7 +108,16 @@ const actions = {
 let flashMsg = null;
 function flash(msg) { flashMsg = msg; render(); setTimeout(() => { flashMsg = null; render(); }, 4000); }
 
+// Focusable input selectors that should survive a re-render.
+const FOCUS_SELECTORS = ['.edit-surface', 'textarea.feedback'];
+
 function render() {
+  // Save focus state so text inputs survive DOM replacement.
+  const prev = document.activeElement;
+  const focusSelector = FOCUS_SELECTORS.find((s) => prev?.matches?.(s));
+  const selStart = focusSelector ? prev.selectionStart : null;
+  const selEnd   = focusSelector ? prev.selectionEnd   : null;
+
   syncTransient();
   clear(root);
   root.append(renderMenubar(store, actions));
@@ -123,6 +132,15 @@ function render() {
   if (flashMsg) {
     root.append(el('div', { text: flashMsg,
       style: 'position:fixed;bottom:16px;right:16px;background:var(--accent);color:#fff;padding:10px 16px;border-radius:6px;z-index:60;white-space:pre-line' }));
+  }
+
+  // Restore focus and cursor position if a text input was active.
+  if (focusSelector) {
+    const next = root.querySelector(focusSelector);
+    if (next) {
+      next.focus();
+      try { next.setSelectionRange(selStart, selEnd); } catch { /* not all inputs support this */ }
+    }
   }
 }
 

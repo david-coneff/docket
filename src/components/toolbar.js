@@ -1,5 +1,7 @@
-// toolbar.js — File menu + toolbar (working dir, commit mode, batch commit).
+// toolbar.js — File menu + toolbar (working dir, commit mode, batch commit, theme).
 import { el } from '../lib/dom.js';
+import { icon } from '../lib/icon.js';
+import { renderThemePill } from '../lib/theme.js';
 import { openTaxonomyInspector } from './taxonomyInspector.js';
 import { COMMITTABLE } from '../lib/resolve.js';
 
@@ -21,15 +23,36 @@ export function renderMenubar(store, actions) {
   });
   document.addEventListener('click', (e) => { if (!fileItem.contains(e.target)) hide(); });
   bar.append(fileItem);
-  bar.append(el('span', { text: 'docket', style: 'margin-left:10px;color:var(--fg-muted);font-size:12px' }));
+  bar.append(el('span.app-name', { text: 'docket' }));
+  bar.append(el('span.menubar-spacer'));
+  bar.append(renderThemePill());
   return bar;
 }
 
 export function renderToolbar(store, actions) {
   const bar = el('div.toolbar');
-  bar.append(el('span.wd-path', { text: store.prefs.workingDirName
-    ? `📁 ${store.prefs.workingDirName}` : '📁 (no folder)' }));
-  bar.append(el('button.btn', { text: 'Change folder', onclick: () => actions.openDir() }));
+
+  // Reconnect banner when handle needs a user gesture to re-grant permission
+  if (store.pendingDirHandle) {
+    const name = store.prefs.workingDirName || 'last folder';
+    const btn = el('button.btn.reconnect-btn', { onclick: () => actions.reconnect() });
+    btn.append(icon('folder', 14), document.createTextNode(` Reconnect to “${name}”`));
+    bar.append(btn);
+    bar.append(el('span.spacer'));
+    return bar;
+  }
+
+  const folderBtn = el('button.btn', { onclick: () => actions.openDir() });
+  folderBtn.append(icon('folder', 14), document.createTextNode(
+    store.prefs.workingDirName ? ` ${store.prefs.workingDirName}` : ' Open folder'
+  ));
+  bar.append(folderBtn);
+
+  if (store.dirHandle) {
+    const reloadBtn = el('button.btn.icon-btn', { title: 'Reload proposals', onclick: () => actions.reload() });
+    reloadBtn.append(icon('reload', 14));
+    bar.append(reloadBtn);
+  }
 
   bar.append(el('span.spacer'));
 
@@ -39,7 +62,7 @@ export function renderToolbar(store, actions) {
     if (store.prefs.commitMode === m) b.classList.add('active');
     toggle.append(b);
   }
-  bar.append(el('span', { text: 'Commit:', style: 'color:var(--fg-muted)' }), toggle);
+  bar.append(el('span.toolbar-label', { text: 'Commit:' }), toggle);
 
   if (store.prefs.commitMode === 'batch') {
     const proposal = store.activeProposal();

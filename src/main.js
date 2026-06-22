@@ -8,16 +8,18 @@ import { store } from './lib/store.js';
 import { parseTaxonomy } from './lib/taxonomy.js';
 import {
   supportsFSAccess, pickWorkingDirectory, readProposals, readProjectTaxonomy,
-  readFilesViaInput, writeResolved,
+  readFilesViaInput, writeResolved, saveDirectoryHandle, restoreDirectoryHandle,
 } from './lib/fsAccess.js';
 import { COMMITTABLE, isProposalReady, pendingCount } from './lib/resolve.js';
+import { initTheme } from './lib/theme.js';
 import { renderMenubar, renderToolbar } from './components/toolbar.js';
 import { renderQueue } from './components/queue.js';
 import { renderReview, resetEditState } from './components/review.js';
 import { renderContextFeedback, resetFeedbackState } from './components/contextFeedback.js';
 
 store.taxonomy = parseTaxonomy(defaultTaxonomyText);
-store.taxonomySource = `tag-taxonomy.md (default)`;
+store.taxonomySource = 'tag-taxonomy.md (default)';
+initTheme();
 
 const root = document.getElementById('app');
 
@@ -27,26 +29,41 @@ function syncTransient() {
   if (key !== lastActiveKey) { resetEditState(); resetFeedbackState(); lastActiveKey = key; }
 }
 
+async function _loadDir(handle) {
+  store.dirHandle = handle;
+  store.pendingDirHandle = null;
+  store.savePrefs({ workingDirName: handle.name });
+  await saveDirectoryHandle(handle);
+  const override = await readProjectTaxonomy(handle);
+  if (override) {
+    store.taxonomy = parseTaxonomy(override);
+    store.taxonomySource = 'rhiz-proposals/tag-taxonomy.md (project-local)';
+  }
+  store.setProposals(await readProposals(handle));
+}
+
 const actions = {
   async openDir() {
     if (supportsFSAccess) {
       const handle = await pickWorkingDirectory();
       if (!handle) return;
-      store.dirHandle = handle;
-      store.savePrefs({ workingDirName: handle.name });
-      const override = await readProjectTaxonomy(handle);
-      if (override) {
-        store.taxonomy = parseTaxonomy(override);
-        store.taxonomySource = 'rhiz-proposals/tag-taxonomy.md (project-local)';
-      }
-      const found = await readProposals(handle);
-      store.setProposals(found);
+      await _loadDir(handle);
     } else {
       const files = await readFilesViaInput();
       const tax = files.find((f) => f.taxonomy);
       if (tax) { store.taxonomy = parseTaxonomy(tax.taxonomy); store.taxonomySource = 'project-local (uploaded)'; }
       store.setProposals(files.filter((f) => f.data));
     }
+  },
+
+  async reconnect() {
+    const pending = store.pendingDirHandle;
+    if (!pending) return;
+    try {
+      const perm = await pending.requestPermission({ mode: 'readwrite' });
+      if (perm === 'granted') await _loadDir(pending);
+      else { store.pendingDirHandle = null; store.emit(); }
+    } catch { store.pendingDirHandle = null; store.emit(); }
   },
 
   async reload() {
@@ -62,8 +79,7 @@ const actions = {
     const next = (proposal.file_changes || []).findIndex(
       (fc, i) => i > store.activeFileIndex && fc.status === 'pending'
     );
-    if (next >= 0) store.setFileIndex(next);
-    else store.emit();
+    if (next >= 0) store.setFileIndex(next); else store.emit();
   },
 
   async onBulkResolve(state) {
@@ -71,9 +87,7 @@ const actions = {
     if (store.prefs.commitMode === 'immediate' && COMMITTABLE.has(state)) {
       const res = await writeResolved(store.dirHandle, proposal);
       flash(`Committed → ${res.path}`);
-    } else {
-      store.emit();
-    }
+    } else { store.emit(); }
   },
 
   async commitBatch() {
@@ -108,11 +122,9 @@ const actions = {
 let flashMsg = null;
 function flash(msg) { flashMsg = msg; render(); setTimeout(() => { flashMsg = null; render(); }, 4000); }
 
-// Focusable input selectors that should survive a re-render.
 const FOCUS_SELECTORS = ['.edit-surface', 'textarea.feedback'];
 
 function render() {
-  // Save focus state so text inputs survive DOM replacement.
   const prev = document.activeElement;
   const focusSelector = FOCUS_SELECTORS.find((s) => prev?.matches?.(s));
   const selStart = focusSelector ? prev.selectionStart : null;
@@ -130,16 +142,14 @@ function render() {
   root.append(panels);
 
   if (flashMsg) {
-    root.append(el('div', { text: flashMsg,
-      style: 'position:fixed;bottom:16px;right:16px;background:var(--accent);color:#fff;padding:10px 16px;border-radius:6px;z-index:60;white-space:pre-line' }));
+    root.append(el('div.flash-msg', { text: flashMsg }));
   }
 
-  // Restore focus and cursor position if a text input was active.
   if (focusSelector) {
     const next = root.querySelector(focusSelector);
     if (next) {
       next.focus();
-      try { next.setSelectionRange(selStart, selEnd); } catch { /* not all inputs support this */ }
+      try { next.setSelectionRange(selStart, selEnd); } catch {}
     }
   }
 }
@@ -147,6 +157,23 @@ function render() {
 store.subscribe(() => render());
 render();
 
+// Auto-restore last working directory on startup.
+(async () => {
+  const restored = await restoreDirectoryHandle();
+  if (!restored) {
+    if (store.prefs.workingDirName) {
+      // Handle was cleared (permission denied); show reconnect hint via normal open
+    }
+    return;
+  }
+  if (restored.needsPermission) {
+    store.pendingDirHandle = restored.handle;
+    store.emit();
+  } else {
+    await _loadDir(restored);
+  }
+})();
+
 if (!supportsFSAccess) {
-  console.info('File System Access API unavailable — using file-input fallback (read) and download (write).');
+  console.info('File System Access API unavailable — using file-input fallback.');
 }

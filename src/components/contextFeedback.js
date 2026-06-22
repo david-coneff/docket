@@ -1,5 +1,7 @@
 // contextFeedback.js — right panel: tags, feedback, and resolution actions.
 import { el } from '../lib/dom.js';
+import { icon } from '../lib/icon.js';
+import * as S from '../lib/storage.js';
 import { renderTags } from './tags.js';
 import { applyResolution, STATES, STATE_LABEL } from '../lib/resolve.js';
 import { lintHunk } from '../lib/lint.js';
@@ -13,27 +15,46 @@ let approveMenuOpen = false;
 
 export function resetFeedbackState() { feedbackText = ''; editNotesText = ''; editMenuOpen = false; approveMenuOpen = false; }
 
+function collapsible(label, contentEl, storageKey) {
+  const open = S.getItem(storageKey) !== '0';
+  const wrap = el('div.collapsible-section');
+  const hdr = el('div.collapsible-header');
+  const arrow = el('span.collapsible-arrow');
+  arrow.append(icon(open ? 'chevron-down' : 'chevron-right', 12));
+  hdr.append(arrow, el('span.collapsible-label', { text: label }));
+  const body = el('div.collapsible-body', { style: open ? '' : 'display:none' });
+  body.append(contentEl);
+  hdr.addEventListener('click', () => {
+    const isOpen = body.style.display !== 'none';
+    body.style.display = isOpen ? 'none' : '';
+    arrow.innerHTML = '';
+    arrow.append(icon(isOpen ? 'chevron-right' : 'chevron-down', 12));
+    S.setItem(storageKey, isOpen ? '0' : '1');
+  });
+  wrap.append(hdr, body);
+  return wrap;
+}
+
 export function renderContextFeedback(store, onResolve, onChange) {
   const panel = el('div.panel.context');
   const fc = store.activeFile();
   if (!fc) return panel;
 
   const resolved = fc.status !== 'pending';
-  panel.append(el('div', { style: 'margin-bottom:10px' }, [
+  panel.append(el('div.status-row', {}, [
     el(`span.status-pill${resolved ? '.resolved' : ''}`, { text: STATE_LABEL[fc.status] || fc.status }),
   ]));
 
-  // Tags
-  panel.append(renderTags(fc, store.taxonomy, onChange));
+  // Tags (collapsible)
+  const tagsContent = renderTags(fc, store.taxonomy, onChange);
+  panel.append(collapsible('Tags', tagsContent, 'dkt:ui.cf.tags'));
 
-  // Feedback
-  const fb = el('div.section');
-  fb.append(el('h3', { text: 'Feedback' }));
-  fb.append(el('div.feedback-label', { text: 'Notes (required for Request changes / Reject)' }));
+  // Feedback (collapsible)
+  const fbWrap = el('div');
+  fbWrap.append(el('div.feedback-label', { text: 'Notes (required for Request changes / Reject)' }));
   const fbArea = el('textarea.feedback', { value: feedbackText, placeholder: 'Markdown feedback…',
     oninput: (e) => { feedbackText = e.target.value; } });
-  fb.append(fbArea);
-
+  fbWrap.append(fbArea);
   const attachList = el('ul.attach-list');
   (fc.comments || []).flatMap((c) => c.attachments || []).forEach((a) =>
     attachList.append(el('li', { text: `📎 ${a.filename} → ${a.path}` })));
@@ -48,23 +69,29 @@ export function renderContextFeedback(store, onResolve, onChange) {
       attachList.append(el('li', { text: `📎 ${f.name} (pending)` }));
     }
   });
-  fb.append(zone, attachList);
-  panel.append(fb);
+  fbWrap.append(zone, attachList);
+  panel.append(collapsible('Feedback', fbWrap, 'dkt:ui.cf.feedback'));
 
-  // Edit note
-  const en = el('div.section');
-  en.append(el('div.feedback-label', { text: 'Edit note (short, for direct edits)' }));
-  en.append(el('input', { type: 'text', value: editNotesText, placeholder: 'e.g. fixed wording in para 3',
-    style: 'width:100%;padding:5px;background:var(--bg);color:var(--fg);border:1px solid var(--border);border-radius:4px',
+  // Edit note (collapsible)
+  const enWrap = el('div');
+  enWrap.append(el('div.feedback-label', { text: 'Short note for direct edits' }));
+  enWrap.append(el('input', { type: 'text', value: editNotesText, placeholder: 'e.g. fixed wording in para 3',
+    style: 'width:100%;padding:5px;background:var(--field-bg);color:var(--text);border:1px solid var(--field-border);border-radius:4px',
     oninput: (e) => { editNotesText = e.target.value; } }));
-  panel.append(en);
+  panel.append(collapsible('Edit note', enWrap, 'dkt:ui.cf.editnote'));
 
-  // Lint gate
+  // Lint gate (always visible)
   const lint = lintHunk(fc);
   const gate = el(`div.lint-gate${lint.errors.length ? '' : ' clean'}`);
-  if (!lint.errors.length && !lint.warnings.length) gate.append(el('span', { text: '✓ rhiz-lint: clean' }));
-  lint.errors.forEach((e) => gate.append(el('div.err', { text: `✗ ${e}` })));
-  lint.warnings.forEach((w) => gate.append(el('div.warn', { text: `⚠ ${w}` })));
+  if (!lint.errors.length && !lint.warnings.length) {
+    gate.append(icon('check-circle', 13), document.createTextNode(' rhiz-lint: clean'));
+  }
+  lint.errors.forEach((e) => {
+    const row = el('div.err'); row.append(icon('x-circle', 13), document.createTextNode(` ${e}`)); gate.append(row);
+  });
+  lint.warnings.forEach((w) => {
+    const row = el('div.warn'); row.append(icon('warning', 13), document.createTextNode(` ${w}`)); gate.append(row);
+  });
   panel.append(gate);
 
   panel.append(renderActions(store, fc, onResolve, onChange));

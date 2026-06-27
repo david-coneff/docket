@@ -32,10 +32,10 @@ artifacts the agent reads on its next pass.
 |------|-------------|-------------|
 | App source | `src/` | Modular ESM + CSS (the source of truth) |
 | Build | `build.mjs` | esbuild single-file roll-up → `docket.html` (rhiz-Partition modality B) |
-| Proposal tooling | `docket-propose.py`, `tag-taxonomy.md` | Generate/validate `rhiz-proposals/*.proposal.json`; the tag vocabulary |
+| Proposal tooling | `docket-propose.py`, [`tag-taxonomy.md`](../tag-taxonomy.md) | Generate/validate `rhiz-proposals/*.proposal.json`; the tag vocabulary |
 | Examples | `examples/rhiz-proposals/` | Sample proposal artifacts |
 | Tests | `test/` | Diff + resolution unit tests |
-| Roadmap | `roadmap.md` | Product roadmap (UI/UX direction) |
+| Roadmap | [`roadmap.md`](../roadmap.md) | Product roadmap (UI/UX direction) |
 
 ---
 

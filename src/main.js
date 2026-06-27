@@ -1,7 +1,7 @@
 // main.js — docket application shell.
 import './styles/theme.css';
 import './styles/app.css';
-import defaultTaxonomyText from '../tag-taxonomy.md?raw';
+import defaultTaxonomyText from '../tag-taxonomy.md';
 
 import { el, clear } from './lib/dom.js';
 import { store } from './lib/store.js';

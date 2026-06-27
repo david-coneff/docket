@@ -8,13 +8,21 @@ direct reviewer editing, and structured feedback artifacts for the agent.
 
 ```sh
 npm install
-npm run dev      # Vite dev server at http://localhost:5173
-npm test         # Vitest unit tests
-npm run build    # Production build → dist/
+npm run build    # roll src/ up into the single-file docket.html (one command)
+npm run dev      # same build in --watch mode (rebuild on change)
+npm test         # unit tests
 ```
 
-Open the app in Chromium, select a working directory (the root of the governed
-repo), and the proposal queue loads automatically from `rhiz-proposals/`.
+`npm run build` runs `node build.mjs`: esbuild bundles + minifies the modular
+`src/` tree and inlines it into one self-contained **`docket.html`** that opens
+straight from `file://` with zero network. There is no dev server and no config
+file — a single non-interactive command an AI agent or a human runs identically
+(rhiz-Partition modality B / DS-002).
+
+`docket.html` is a **generated build output, not source** — only `src/` is
+canonical. Open the built `docket.html` in Chromium, select a working directory
+(the root of the governed repo), and the proposal queue loads automatically from
+`rhiz-proposals/`.
 
 ## Creating proposals
 
@@ -59,7 +67,8 @@ python docket-propose.py stamp-taxonomy
 
 ## Architecture
 
-- **Build**: Vite 5, zero runtime dependencies, `?raw` import for taxonomy bundling
+- **Build**: esbuild single-file roll-up (`build.mjs`) → `docket.html`; the
+  taxonomy is bundled via esbuild's `.md` text loader (the `?raw` equivalent)
 - **UI**: Vanilla JS ES modules, `initX(deps)` dependency-injection pattern
 - **Storage**: File System Access API (`showDirectoryPicker`) + localStorage for
   working directory persistence; OPFS for unsaved Edit-tab draft state

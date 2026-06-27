@@ -5,16 +5,14 @@
   "type": "module",
   "description": "Knowledge article approval workflow UI (docket).",
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "preview": "vite preview",
+    "build": "node build.mjs",
+    "dev": "node build.mjs --watch",
     "test": "node test/diff.test.mjs && node test/resolve.test.mjs"
   },
   "dependencies": {
     "lucide": "^0.400.0"
   },
   "devDependencies": {
-    "vite": "^5.4.0",
-    "vite-plugin-singlefile": "^2.0.0"
+    "esbuild": "^0.24.0"
   }
 }

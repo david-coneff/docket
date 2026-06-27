@@ -10,8 +10,8 @@
 
 When starting a session on docket under the Rhizome methodology:
 
-1. `david-coneff/rhizome` — `rhizome/core/rhiz-core.md` (always loaded)
-2. `david-coneff/rhizome` — `rhizome/core/rhiz-core.manifest.yaml` (select modules for task)
+1. `david-coneff/rhizome` — `protocol/core/rhiz-core.md` (always loaded)
+2. `david-coneff/rhizome` — `protocol/core/rhiz-core.manifest.yaml` (select modules for task)
 3. `rhiz-memory/_instance.md` (this file — project identity + the capability it provides)
 4. `rhiz-memory/state/SESSION_HANDOFF.md` (current work context — create when first needed)
 
@@ -43,7 +43,7 @@ artifacts the agent reads on its next pass.
 
 Docket is the authoritative home of the **knowledge-article review** capability
 that Rhizome's methodology depends on. It is registered in rhizome at
-[`rhizome/docs/ecosystem-dependencies.md`](https://github.com/david-coneff/rhizome) **CAP-001**;
+[`protocol/docs/ecosystem-dependencies.md`](https://github.com/david-coneff/rhizome) **CAP-001**;
 this section is the provider side of that bidirectional link.
 
 - **Capability**: human review of agent-proposed knowledge/prose changes —

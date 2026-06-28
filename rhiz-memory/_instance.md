@@ -80,6 +80,6 @@ point of the pointer is that routine evolution needs no rhizome edit).
 | Assumptions | Named inline where made |
 | Contracts | The proposal artifact format (`docket-propose.py`, `examples/rhiz-proposals/`) — see Capability provided above |
 | Testing | `test/` |
-| Dependencies | `package.json` (esbuild, lucide); rhizome `tools/rhiz-lint.py` (mirrored) |
+| Dependencies | `package.json` (esbuild, lucide); rhiz tooling (rhiz-lint, rhiz-search, doc-graph) run via `tools/rhiz` against the rhizome `tools-stable` channel — the tools live in rhizome and are not copied/mirrored here |
 | Documentation | `README.md`, `roadmap.md` |
 | Oversight | `rhiz-memory/audits/` |

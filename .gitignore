@@ -1,3 +1,7 @@
 node_modules/
 dist/
 *.log
+
+# rhiz tooling channel — gitignored: resolved tools cache + generated search index
+.rhiz-tools/
+.rhiz-search/

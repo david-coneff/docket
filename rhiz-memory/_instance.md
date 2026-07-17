@@ -15,18 +15,13 @@ When starting a session on docket under the Rhizome methodology:
 3. `rhiz-memory/_instance.md` (this file — project identity + the capability it provides)
 4. `rhiz-memory/state/SESSION_HANDOFF.md` (current work context — create when first needed)
 
-The Rhizome protocol specs and tooling live in `david-coneff/rhizome`. This
-repository contains only project work and its own instance state under
-`rhiz-memory/`.
+The Rhizome protocol specs and tooling live in `david-coneff/rhizome`. This repository contains only project work and its own instance state under `rhiz-memory/`.
 
 ---
 
 ## Project identity
 
-Docket is a single-file HTML application for reviewing agent-proposed changes to
-prose/knowledge articles: word-level track-changes diffs, a six-state
-file-change resolution model, direct reviewer editing, and structured feedback
-artifacts the agent reads on its next pass.
+Docket is a single-file HTML application for reviewing agent-proposed changes to prose/knowledge articles: word-level track-changes diffs, a six-state file-change resolution model, direct reviewer editing, and structured feedback artifacts the agent reads on its next pass.
 
 | Area | Directories | Description |
 |------|-------------|-------------|
@@ -41,28 +36,14 @@ artifacts the agent reads on its next pass.
 
 ## Capability provided  →  rhizome CAP-001
 
-Docket is the authoritative home of the **knowledge-article review** capability
-that Rhizome's methodology depends on. It is registered in rhizome at
-[`protocol/docs/ecosystem-dependencies.md`](https://github.com/david-coneff/rhizome) **CAP-001**;
-this section is the provider side of that bidirectional link.
+Docket is the authoritative home of the **knowledge-article review** capability that Rhizome's methodology depends on. It is registered in rhizome at [`protocol/docs/ecosystem-dependencies.md`](https://github.com/david-coneff/rhizome) **CAP-001**; this section is the provider side of that bidirectional link.
 
-- **Capability**: human review of agent-proposed knowledge/prose changes —
-  propose → lint → track-changes review → six-state resolve → structured feedback.
-- **Authoritative contract (owned here)**: the proposal artifact format
-  (`rhiz-proposals/*.proposal.json`), defined by `docket-propose.py` and the
-  `examples/rhiz-proposals/` samples, plus the six resolution states and the tag
-  taxonomy (`tag-taxonomy.md`). Rhizome **points at** this contract rather than
-  copying it, so docket can evolve the format with its UI/UX without desyncing a
-  rhizome-held copy.
-- **What stayed in rhizome**: the *linting* half — `tools/rhiz-lint.py` and
-  rhiz-State §6.8.6 (knowledge-base linkage integrity). Docket's browser-side
-  lint gate (`src/lib/lint.js`) mirrors that tool.
-- **Origin**: docket began life as `rhiz-review` inside the rhizome repo and was
-  migrated out to its own repo (and renamed) on 2026-06-21.
+- **Capability**: human review of agent-proposed knowledge/prose changes — propose → lint → track-changes review → six-state resolve → structured feedback.
+- **Authoritative contract (owned here)**: the proposal artifact format (`rhiz-proposals/*.proposal.json`), defined by `docket-propose.py` and the `examples/rhiz-proposals/` samples, plus the six resolution states and the tag taxonomy (`tag-taxonomy.md`). Rhizome **points at** this contract rather than copying it, so docket can evolve the format with its UI/UX without desyncing a rhizome-held copy.
+- **What stayed in rhizome**: the *linting* half — `tools/rhiz-lint.py` and rhiz-State §6.8.6 (knowledge-base linkage integrity). Docket's browser-side lint gate (`src/lib/lint.js`) mirrors that tool.
+- **Origin**: docket began life as `rhiz-review` inside the rhizome repo and was migrated out to its own repo (and renamed) on 2026-06-21.
 
-When the proposal contract changes here, update rhizome CAP-001's pointer note if
-the *boundary* of what docket owns changes (not for every format tweak — the
-point of the pointer is that routine evolution needs no rhizome edit).
+When the proposal contract changes here, update rhizome CAP-001's pointer note if the *boundary* of what docket owns changes (not for every format tweak — the point of the pointer is that routine evolution needs no rhizome edit).
 
 ---
 

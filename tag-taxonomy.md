@@ -7,40 +7,27 @@ schema-version: "1"
 # docket Tag Taxonomy
 
 **Canonical default taxonomy for docket.**  
-Projects may override by placing a `tag-taxonomy.md` in their
-`rhiz-proposals/` directory. The UI loads the project-local file if
-present; otherwise falls back to this file.
+Projects may override by placing a `tag-taxonomy.md` in their `rhiz-proposals/` directory. The UI loads the project-local file if present; otherwise falls back to this file.
 
-This file follows rhiz-Core §1 identity governance. The `cid-short`
-and `adopted` fields in the YAML front matter are excluded from the
-hash (they are above the `CONTENT HASHING SCOPE START` marker). The
-hash covers everything from the marker through end-of-file.
+This file follows rhiz-Core §1 identity governance. The `cid-short` and `adopted` fields in the YAML front matter are excluded from the hash (they are above the `CONTENT HASHING SCOPE START` marker). The hash covers everything from the marker through end-of-file.
 
-To compute and stamp the hash on first formal adoption, or after any
-content change:
+To compute and stamp the hash on first formal adoption, or after any content change:
 ```
 python docket-propose.py stamp-taxonomy [--file path/to/tag-taxonomy.md]
 ```
 This updates `cid-short` and `adopted` in the front matter in-place.
 
-=====================================================================
-CONTENT HASHING SCOPE START
-=====================================================================
+===================================================================== CONTENT HASHING SCOPE START =====================================================================
 
 ## Tag Categories
 
-Tags are organized into four categories. The UI renders each category
-in a distinct color derived from the active theme's CSS custom
-properties. Custom (freeform) tags that do not match any predefined
-value are rendered in a neutral chip style.
+Tags are organized into four categories. The UI renders each category in a distinct color derived from the active theme's CSS custom properties. Custom (freeform) tags that do not match any predefined value are rendered in a neutral chip style.
 
 ---
 
 ## Category: bug-lifecycle
 
-Covers the lifecycle of defects and fixes: from discovery through
-hypothesis, attempted fix, and confirmation. Maps directly to the
-confirmed/hypothetical distinction in rhiz-State §6.7.
+Covers the lifecycle of defects and fixes: from discovery through hypothesis, attempted fix, and confirmation. Maps directly to the confirmed/hypothetical distinction in rhiz-State §6.7.
 
 | Tag | Meaning |
 |---|---|
@@ -58,26 +45,20 @@ confirmed/hypothetical distinction in rhiz-State §6.7.
 
 ## Category: hypothesis
 
-Covers the nature of a proposed change in terms of *what level of the
-system it operates on*. These two tags are mutually exclusive within a
-single hunk — a change either questions intent or refines
-implementation, not both.
+Covers the nature of a proposed change in terms of *what level of the system it operates on*. These two tags are mutually exclusive within a single hunk — a change either questions intent or refines implementation, not both.
 
 | Tag | Meaning |
 |---|---|
 | `intent-hypothesis` | Proposes a change to *what* the system should do: design direction, goals, or scope. Questions or revises intent itself. Warrants deliberation before implementation follows. |
 | `implementation-hypothesis` | Proposes a change to *how* intent is achieved: a specific mechanism, code approach, or technical choice, without questioning the underlying intent. Can often be evaluated on technical merit once intent is settled. |
 
-**Mutual exclusion rule**: a single hunk should not carry both
-`intent-hypothesis` and `implementation-hypothesis`. The UI warns
-when both are present on the same hunk.
+**Mutual exclusion rule**: a single hunk should not carry both `intent-hypothesis` and `implementation-hypothesis`. The UI warns when both are present on the same hunk.
 
 ---
 
 ## Category: prose-governance
 
-Covers the quality and status of prose knowledge articles: drafts,
-evidentiary gaps, structural concerns, and cross-cutting patterns.
+Covers the quality and status of prose knowledge articles: drafts, evidentiary gaps, structural concerns, and cross-cutting patterns.
 
 | Tag | Meaning |
 |---|---|
@@ -92,8 +73,7 @@ evidentiary gaps, structural concerns, and cross-cutting patterns.
 
 ## Category: process
 
-Covers workflow and queue state: blockers, staleness, and items
-awaiting external resolution.
+Covers workflow and queue state: blockers, staleness, and items awaiting external resolution.
 
 | Tag | Meaning |
 |---|---|
@@ -106,10 +86,7 @@ awaiting external resolution.
 
 ## Machine Form
 
-The YAML block below is the machine-readable projection of the
-taxonomy above. docket and docket-propose load this block for
-autocomplete and validation. On any disagreement between this block
-and the prose tables above, the prose tables govern (rhiz-Core §9).
+The YAML block below is the machine-readable projection of the taxonomy above. docket and docket-propose load this block for autocomplete and validation. On any disagreement between this block and the prose tables above, the prose tables govern (rhiz-Core §9).
 
 ```yaml
 taxonomy:

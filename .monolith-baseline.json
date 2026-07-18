@@ -1,0 +1,9 @@
+{
+  "_comment": "Monolith-growth census baseline (DS-016). The shared rhiz-lint monolith-growth check (rhiz_growth engine, from rhizome tools-stable) reads this and bands docket's hand-grown source against the thresholds. `rhiz census` drills the bands. Adopted 2026-07-18 as a forward tripwire: docket's source is under threshold today, so this arms the alert for future growth rather than flagging an existing monolith. Generated output (docket.html) and vendored rhizome tools (tools/) are out of scan scope.",
+  "thresholds": {"lines": 500, "bytes": 50000, "advisory_fraction": 0.8, "stale_growth": 1.25},
+  "code": {
+    "scan": ["src/", "docket-propose.py", "build.mjs"],
+    "extensions": [".js", ".mjs", ".py"]
+  },
+  "keep_whole": {}
+}

@@ -13,7 +13,7 @@ When starting a session on docket under the Rhizome methodology:
 1. `david-coneff/rhizome` — `protocol/core/rhiz-core.md` (always loaded)
 2. `david-coneff/rhizome` — `protocol/core/rhiz-core.manifest.yaml` (select modules for task)
 3. `rhiz-memory/_instance.md` (this file — project identity + the capability it provides)
-4. `rhiz-memory/state/session-summary.md` (steered working narrative) + `state/session-checkpoints.md` (latest checkpoint coordinates / next-action pointer) + `state/session-cache.md` (un-losables). These are the machine-written, git-tracked session-state buckets — rehydrated automatically on resume; created at the first checkpoint (rhizome AD-007; no hand-maintained SESSION_HANDOFF).
+4. `rhiz-memory/state/session-summary.md` (steered working narrative) + [`state/session-checkpoints.md`](state/session-checkpoints.md) (latest checkpoint coordinates / next-action pointer) + `state/session-cache.md` (un-losables). These are the machine-written, git-tracked session-state buckets — rehydrated automatically on resume; created at the first checkpoint (rhizome AD-007; no hand-maintained SESSION_HANDOFF).
 
 The Rhizome protocol specs and tooling live in `david-coneff/rhizome`. This repository contains only project work and its own instance state under `rhiz-memory/`.
 
@@ -55,7 +55,7 @@ When the proposal contract changes here, update rhizome CAP-001's pointer note i
 | Decisions | `rhiz-memory/state/decisions.md` (create when needed) |
 | Evidence | Cited inline in session handoffs / audits |
 | Planning | `roadmap.md` |
-| State | the git-tracked session buckets (created at the first checkpoint): `rhiz-memory/state/session-summary.md`, `state/session-checkpoints.md`, `state/session-cache.md` |
+| State | the git-tracked session buckets (created at the first checkpoint): `rhiz-memory/state/session-summary.md`, [`state/session-checkpoints.md`](state/session-checkpoints.md), `state/session-cache.md` |
 | Risk / Debt | Named inline in audit findings (`rhiz-memory/audits/`) |
 | Research | `rhiz-memory/audits/` |
 | Assumptions | Named inline where made |

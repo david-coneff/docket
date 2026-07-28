@@ -6,8 +6,8 @@
 > this file — it just goes along for the ride.
 
 ## Latest checkpoint
-- **when** 20260728T113507Z · context ~63% · mode claude-web · session `015d7bd6-829e-5329-ad5b-6b9450af643a`
-- **transcript** /home/user/rhizome/transcripts/015d7bd6-829e-5329-ad5b-6b9450af643a-20260728T113507Z.jsonl
-- **git START** `623fee7025595287ff36194ce77eeb3d4c1e3f76`
-- **git END** `0de78ecbd62e071aa9890fcf1fccfa5f5cb2f53e` (claude/ripple-web-ui-sketch-2c9uqu)
-- **work (commit range)** `623fee702559..0de78ecbd62e` — 1 commit(s)
+- **when** 20260728T123624Z · context ~78% · mode claude-web · session `015d7bd6-829e-5329-ad5b-6b9450af643a`
+- **transcript** /home/user/rhizome/transcripts/015d7bd6-829e-5329-ad5b-6b9450af643a-20260728T123624Z.jsonl
+- **git START** `0de78ecbd62e071aa9890fcf1fccfa5f5cb2f53e`
+- **git END** `9528787f56323ca83abbdb918ac909ccae4b8c0c` (claude/ripple-web-ui-sketch-2c9uqu)
+- **work (commit range)** `0de78ecbd62e..9528787f5632` — 1 commit(s)

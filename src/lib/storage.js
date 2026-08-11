@@ -1,5 +1,5 @@
 // storage.js — synchronous key/value store with OPFS durability mirror.
-// Adapted from tessel's StorageEngine. Key convention: 'dkt:*'.
+// Adapted from the family's shared StorageEngine. Key convention: 'dkt:*'.
 //
 // localStorage is the synchronous source of truth so getItem() returns
 // persisted values immediately at module load (no top-level await, which the

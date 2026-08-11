@@ -1,4 +1,4 @@
-// theme.js — ThemeManager with A/B toggle pill. Adapted from tessel.
+// theme.js — ThemeManager with A/B toggle pill. Adapted from the family's shared implementation.
 import * as S from './storage.js';
 
 const THEMES = [

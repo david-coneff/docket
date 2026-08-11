@@ -1,4 +1,4 @@
-// icon.js — Lucide SVG icon factory. Adapted from tessel's icon.js.
+// icon.js — Lucide SVG icon factory. Adapted from the family's shared icon factory.
 import {
   FolderOpen, Folder, RotateCcw, X, Check, ChevronDown, ChevronUp, ChevronRight,
   ChevronLeft, Trash2, Eye, EyeOff, Moon, Sun, Palette, FileText, Settings2,

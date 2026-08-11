@@ -1,0 +1,11 @@
+{
+  "_comment": "docket's outbound pins (protocol-instance-split principle 4). A child pins its protocol and its OWN memory repo — nothing else; that absence IS the sharing guarantee.",
+  "protocol_name": "rhizome-protocol",
+  "protocol_url": "https://github.com/david-coneff/rhizome-protocol.git",
+  "protocol_path": "../rhizome-protocol",
+  "protocol_ref": "main",
+  "protocol_sha": "a57825f3f89d2c47aa67b1b3b43a6c21b9f22fc0",
+  "memory_name": "docket-memory",
+  "memory_url": "https://github.com/david-coneff/docket-memory.git",
+  "memory_path": "../docket-memory"
+}

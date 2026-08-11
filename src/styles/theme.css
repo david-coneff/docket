@@ -3,7 +3,7 @@
    prefers-color-scheme removed — ThemeManager handles theming explicitly. */
 
 :root {
-  /* Core — aligned with tessel ThemeManager var names */
+  /* Core — aligned with the family ThemeManager var names */
   --bg: #1a1b1e;
   --surface: #24262b;
   --surface2: #2d2f35;
@@ -26,7 +26,7 @@
   --rev-del-bg: #2e2440;
   --rev-del-fg: #c08cff;
 
-  /* Semantic status tokens — constant across themes (tessel convention).
+  /* Semantic status tokens — constant across themes (family convention).
      ThemeManager does not override these, so they persist under every theme. */
   --green: #3fb950;
   --gold: #d29922;

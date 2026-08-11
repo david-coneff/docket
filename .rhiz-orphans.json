@@ -1,0 +1,13 @@
+{
+  "_generated": "known-orphan registry",
+  "orphans": [
+    {
+      "path": "examples/rhiz-proposals/failure-paths/tauri-window-management.md",
+      "reason": "standalone reference doc, reached directly rather than through a reading graph \u2014 its former index (rhiz-memory/_instance.md) moved to the memory repo in the protocol-instance split, so the product tree no longer carries an attachment point for it"
+    },
+    {
+      "path": "tag-taxonomy.md",
+      "reason": "standalone reference doc, reached directly rather than through a reading graph \u2014 its former index (rhiz-memory/_instance.md) moved to the memory repo in the protocol-instance split, so the product tree no longer carries an attachment point for it"
+    }
+  ]
+}

@@ -60,6 +60,16 @@ jobs:
           RHIZ_MEMORY_PATH: ${{ github.workspace }}/docket-memory
         run: python3 tools/rhiz.py maintain
 
+      # The memory repo lints on ITS OWN root — rhiz-lint stays product-local and
+      # never reaches across a repo boundary, so a clone without the sibling is not
+      # silently under-governed (EL-152). Reuses the checkout above rather than
+      # adding a workflow to docket-memory. Its .rhiz-lint.json declares
+      # knowledge_roots ["."], which is what this invocation expects.
+      - name: Lint docket-memory on its own root
+        env:
+          RHIZ_TOOLS_PATH: ${{ github.workspace }}/rhizome-protocol
+        run: python3 rhizome-protocol/tools/rhiz-lint.py --root docket-memory
+
       - name: Shareability gate on docket-memory
         env:
           RHIZ_TOOLS_PATH: ${{ github.workspace }}/rhizome-protocol

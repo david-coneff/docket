@@ -89,6 +89,19 @@ jobs:
           RHIZ_TOOLS_PATH: ${{ github.workspace }}/rhizome-protocol
         run: python3 rhizome-protocol/tools/rhiz-lint.py --root docket-memory
 
+      # The reference half of the same boundary: lint validates docket-memory
+      # INTERNALLY, this validates what it says about OTHER repos — protocol
+      # paths against the live protocol tree, and `<repo>:<path>` coordinates
+      # against whichever siblings this workflow checked out. Coordinates naming
+      # a repo that is not checked out are SKIPPED, not failed, so the verdict
+      # does not depend on which repos a given job happens to clone.
+      - name: Cross-repo reference check on docket-memory
+        env:
+          RHIZ_TOOLS_PATH: ${{ github.workspace }}/rhizome-protocol
+        run: |
+          python3 rhizome-protocol/tools/rhiz-lint.py \
+            --root rhizome-protocol --cross-repo docket-memory
+
       - name: Shareability gate on docket-memory
         env:
           RHIZ_TOOLS_PATH: ${{ github.workspace }}/rhizome-protocol

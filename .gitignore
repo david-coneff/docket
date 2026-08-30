@@ -11,3 +11,38 @@ dist/
 # receipt/result record. Runtime state that exists to survive a SESSION, not to be
 # committed — recovery reads it from disk.
 .rhiz/subagent-findings/
+
+# rhizome runtime state (`rhiz ignore-parity`) — machine-local, never committed.
+# Mirrored from rhizome-protocol's own .gitignore, which is the canonical list
+# because it is where a tool author already edits when they add a runtime file.
+# Re-run `rhiz ignore-parity --fix` after pulling new tools; the drift is silent
+# otherwise (EL-148: a channel bless ships tools, not a child's .gitignore).
+
+.rhiz/loaded-units.json
+.rhiz/read-mandate.json
+.rhiz/checkpoint-tail-marker.json
+.rhiz/expectations.*.json
+.rhiz/partition-transition.json
+.rhiz/context-journal.jsonl
+.rhiz/watch-*.json
+.rhiz/context-alert.json
+.rhiz/model-windows.json
+.rhiz/window-gap.*
+.rhiz/channel-seen
+.rhiz/transcript-ptr
+.rhiz/context.*
+.rhiz/milestone.*
+.rhiz/session-start-shas.*
+.rhiz/binding-degraded
+.rhiz/session-end-probe.jsonl
+.rhiz/sync-nudge.*.json
+.rhiz/census.*
+.rhiz/census-milestone.*
+.rhiz/refcapture.*.json
+.rhiz/context-dismiss
+.rhiz/access-log.jsonl
+.rhiz/setup-ack
+.rhiz/emission.*.json
+.rhiz/injection-stats.jsonl
+.rhiz/inject/
+.rhiz/mandate-compliance.jsonl

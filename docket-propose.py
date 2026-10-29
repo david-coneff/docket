@@ -15,6 +15,7 @@ Usage:
       [--rationale TEXT]
       [--tags TAG ...]
       [--proposal-tags TAG ...]
+      [--weight trivial|standard|significant]   (default standard)
       [--proposals-dir DIR]
 
   python docket-propose.py add-file
@@ -65,6 +66,10 @@ VALID_FILE_STATUSES = {
     "changes-requested", "rejected",
 }
 VALID_EDIT_MODES = {"commit-as-is", "agent-feedback"}
+# Roadmap DP-1: how much of the lifecycle a proposal takes. The agent sets it; the reviewer
+# may override it in the UI (which keeps the agent's value in `weight_agent`).
+VALID_WEIGHTS = ("trivial", "standard", "significant")
+DEFAULT_WEIGHT = "standard"
 
 # rhiz-Core §1.2 — canonical hashing scope marker.
 HASH_SCOPE_MARKER = "CONTENT HASHING SCOPE START"
@@ -149,6 +154,11 @@ def validate_proposal(obj: dict) -> list[str]:
 
     if "status" in obj and obj["status"] not in VALID_STATUSES:
         errors.append(f"Invalid status '{obj['status']}'. Must be one of: {VALID_STATUSES}")
+
+    # Optional: a proposal written before DP-1 has no weight and reads as standard.
+    for key in ("weight", "weight_agent"):
+        if key in obj and obj[key] not in VALID_WEIGHTS:
+            errors.append(f"Invalid {key} '{obj[key]}'. Must be one of: {', '.join(VALID_WEIGHTS)}")
 
     if "file_changes" in obj:
         if not isinstance(obj["file_changes"], list) or len(obj["file_changes"]) == 0:
@@ -296,6 +306,7 @@ def cmd_new(args, root: Path) -> int:
         "created": datetime.now(timezone.utc).isoformat(),
         "status": "open",
         "tags": args.proposal_tags or [],
+        "weight": args.weight,
         "agent_notes": resolve_agent_notes(args),
         "file_changes": [fc],
     }
@@ -440,6 +451,8 @@ def main() -> int:
     p_new.add_argument("--rationale",        default="", help="Why this specific file is being changed")
     p_new.add_argument("--tags",             nargs="*", default=None, help="File-change-level tags")
     p_new.add_argument("--proposal-tags",    nargs="*", default=None, help="Proposal-level tags")
+    p_new.add_argument("--weight",           choices=VALID_WEIGHTS, default=DEFAULT_WEIGHT,
+                       help="DP-1 weight tier: trivial, standard (default) or significant")
     p_new.add_argument("--proposals-dir",    default=None)
 
     # add-file

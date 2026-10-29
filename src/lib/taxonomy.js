@@ -92,7 +92,7 @@ export function categoryOf(taxonomy, tag) {
 }
 
 /**
- * Given a hunk's current tag list and a candidate tag, return the tag(s) that
+ * Given a file change's current tag list and a candidate tag, return the tag(s) that
  * the candidate is mutually exclusive with and already present. Used to warn
  * (intent-hypothesis vs implementation-hypothesis).
  */

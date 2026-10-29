@@ -139,3 +139,4 @@ dist/
 .rhiz/verdicts/
 .rhiz/runs/
 .rhiz/succession.json
+__pycache__/

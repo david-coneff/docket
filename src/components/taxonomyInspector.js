@@ -33,7 +33,7 @@ export function openTaxonomyInspector(store) {
     modal.append(table);
     const mutex = tax.mutualExclusion.filter((g) => g.every((t) => cat.tags.includes(t)));
     mutex.forEach((g) => modal.append(el('div.mutex-warn', {
-      text: `⚠ Mutually exclusive within a single hunk: ${g.join(' / ')}` })));
+      text: `⚠ Mutually exclusive within a single file: ${g.join(' / ')}` })));
   }
 
   backdrop.append(modal);

@@ -2,8 +2,8 @@
 import { el } from '../lib/dom.js';
 import { categoryOf, mutexConflicts } from '../lib/taxonomy.js';
 
-export function renderTags(hunk, taxonomy, onChange) {
-  const tags = Array.isArray(hunk.tags) ? hunk.tags : (hunk.tags = []);
+export function renderTags(fc, taxonomy, onChange) {
+  const tags = Array.isArray(fc.tags) ? fc.tags : (fc.tags = []);
   const wrap = el('div.section');
   wrap.append(el('h3', { text: 'Tags' }));
 
@@ -13,7 +13,7 @@ export function renderTags(hunk, taxonomy, onChange) {
     chips.append(el(`span.chip.${cat}`, {}, [
       tag,
       el('span.x', { text: '×', title: 'remove', onclick: () => {
-        hunk.tags = tags.filter((t) => t !== tag); onChange();
+        fc.tags = tags.filter((t) => t !== tag); onChange();
       } }),
     ]));
   }

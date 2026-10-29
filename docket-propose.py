@@ -15,6 +15,7 @@ Usage:
       [--rationale TEXT]
       [--tags TAG ...]
       [--proposal-tags TAG ...]
+      [--weight trivial|standard|significant]   (default standard)
       [--proposals-dir DIR]
 
   python docket-propose.py add-file
@@ -39,6 +40,10 @@ Usage:
 Content fields (before/after/agent-notes) are supplied as file paths so the
 agent never has to shell-escape multi-KB article bodies.
 
+Tags: new, add-file and validate print a warning (exit code unchanged) for each
+tag the active taxonomy does not list: rhiz-proposals/tag-taxonomy.md when it
+exists, else the tag-taxonomy.md beside this tool. Freeform tags are accepted.
+
 Exit codes:
   0  success
   1  validation error or missing input
@@ -61,9 +66,78 @@ VALID_FILE_STATUSES = {
     "changes-requested", "rejected",
 }
 VALID_EDIT_MODES = {"commit-as-is", "agent-feedback"}
+# Roadmap DP-1: how much of the lifecycle a proposal takes. The agent sets it; the reviewer
+# may override it in the UI (which keeps the agent's value in `weight_agent`).
+VALID_WEIGHTS = ("trivial", "standard", "significant")
+DEFAULT_WEIGHT = "standard"
 
 # rhiz-Core §1.2 — canonical hashing scope marker.
 HASH_SCOPE_MARKER = "CONTENT HASHING SCOPE START"
+
+
+# ---------------------------------------------------------------------------
+# Tag taxonomy (roadmap §2 "Tag validation": warn, never error; freeform tags
+# are always accepted)
+# ---------------------------------------------------------------------------
+
+def active_taxonomy(pdir: Path) -> Path | None:
+    """The project-local `<proposals dir>/tag-taxonomy.md` when it exists, else
+    the default beside this tool; the same choice the UI makes."""
+    for cand in (pdir / DEFAULT_TAXONOMY, Path(__file__).resolve().parent / DEFAULT_TAXONOMY):
+        if cand.is_file():
+            return cand
+    return None
+
+
+def taxonomy_tags(text: str) -> set[str]:
+    """Tag ids from the taxonomy's fenced ```yaml Machine Form, read by the same
+    shallow structure src/lib/taxonomy.js parses (a category is `- id:` at
+    indent <= 4; its tags are `- id:` lines under its `tags:` key)."""
+    start = text.find("```yaml\n")
+    if start < 0:
+        return set()
+    end = text.find("\n```", start + 8)
+    block = text[start + 8: end if end >= 0 else len(text)]
+    tags: set[str] = set()
+    in_tags = False
+    seen_category = False
+    for raw in block.split("\n"):
+        if not raw.strip():
+            continue
+        indent = len(raw) - len(raw.lstrip())
+        line = raw.strip()
+        if line.startswith("- id:") and indent <= 4:
+            seen_category, in_tags = True, False
+        elif not seen_category:
+            continue
+        elif line.startswith("tags:"):
+            in_tags = True
+        elif line.startswith("mutual-exclusion-groups:"):
+            in_tags = False
+        elif in_tags and line.startswith("- id:"):
+            tags.add(line[5:].strip())
+    return tags
+
+
+def warn_unknown_tags(proposal: dict, pdir: Path) -> int:
+    """Print one warning per tag (proposal-level or per file change) that the
+    active taxonomy does not list. Returns how many were printed; never fails."""
+    tax = active_taxonomy(pdir)
+    known = taxonomy_tags(tax.read_text(encoding="utf-8")) if tax else set()
+    if not known:
+        print(f"Warning: no taxonomy tags could be read "
+              f"({tax or 'no tag-taxonomy.md found'}); tags not checked", file=sys.stderr)
+        return 0
+    n = 0
+    places = [("proposal", proposal.get("tags") or [])]
+    places += [(fc.get("id", "?"), fc.get("tags") or []) for fc in proposal.get("file_changes") or []]
+    for where, tags in places:
+        for tag in tags:
+            if tag not in known:
+                print(f"Warning: {where}: tag '{tag}' is not in the active taxonomy ({tax}); "
+                      f"accepted as freeform", file=sys.stderr)
+                n += 1
+    return n
 
 
 # ---------------------------------------------------------------------------
@@ -80,6 +154,11 @@ def validate_proposal(obj: dict) -> list[str]:
 
     if "status" in obj and obj["status"] not in VALID_STATUSES:
         errors.append(f"Invalid status '{obj['status']}'. Must be one of: {VALID_STATUSES}")
+
+    # Optional: a proposal written before DP-1 has no weight and reads as standard.
+    for key in ("weight", "weight_agent"):
+        if key in obj and obj[key] not in VALID_WEIGHTS:
+            errors.append(f"Invalid {key} '{obj[key]}'. Must be one of: {', '.join(VALID_WEIGHTS)}")
 
     if "file_changes" in obj:
         if not isinstance(obj["file_changes"], list) or len(obj["file_changes"]) == 0:
@@ -227,12 +306,14 @@ def cmd_new(args, root: Path) -> int:
         "created": datetime.now(timezone.utc).isoformat(),
         "status": "open",
         "tags": args.proposal_tags or [],
+        "weight": args.weight,
         "agent_notes": resolve_agent_notes(args),
         "file_changes": [fc],
     }
 
     path = write_proposal(pdir, proposal)
     print(f"Created: {path}")
+    warn_unknown_tags(proposal, pdir)
     return 0
 
 
@@ -259,6 +340,7 @@ def cmd_add_file(args, root: Path) -> int:
 
     path = write_proposal(pdir, proposal)
     print(f"Updated: {path}  ({seq} file(s) total)")
+    warn_unknown_tags(proposal, pdir)
     return 0
 
 
@@ -266,6 +348,7 @@ def cmd_validate(args, root: Path) -> int:
     pdir = proposals_dir(root, args.proposals_dir)
     _, proposal = load_proposal(pdir, args.proposal)
     errors = validate_proposal(proposal)
+    warn_unknown_tags(proposal, pdir)
     if errors:
         print(f"Validation FAILED ({len(errors)} error(s)):")
         for e in errors:
@@ -368,6 +451,8 @@ def main() -> int:
     p_new.add_argument("--rationale",        default="", help="Why this specific file is being changed")
     p_new.add_argument("--tags",             nargs="*", default=None, help="File-change-level tags")
     p_new.add_argument("--proposal-tags",    nargs="*", default=None, help="Proposal-level tags")
+    p_new.add_argument("--weight",           choices=VALID_WEIGHTS, default=DEFAULT_WEIGHT,
+                       help="DP-1 weight tier: trivial, standard (default) or significant")
     p_new.add_argument("--proposals-dir",    default=None)
 
     # add-file

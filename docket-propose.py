@@ -39,6 +39,10 @@ Usage:
 Content fields (before/after/agent-notes) are supplied as file paths so the
 agent never has to shell-escape multi-KB article bodies.
 
+Tags: new, add-file and validate print a warning (exit code unchanged) for each
+tag the active taxonomy does not list: rhiz-proposals/tag-taxonomy.md when it
+exists, else the tag-taxonomy.md beside this tool. Freeform tags are accepted.
+
 Exit codes:
   0  success
   1  validation error or missing input
@@ -64,6 +68,71 @@ VALID_EDIT_MODES = {"commit-as-is", "agent-feedback"}
 
 # rhiz-Core §1.2 — canonical hashing scope marker.
 HASH_SCOPE_MARKER = "CONTENT HASHING SCOPE START"
+
+
+# ---------------------------------------------------------------------------
+# Tag taxonomy (roadmap §2 "Tag validation": warn, never error; freeform tags
+# are always accepted)
+# ---------------------------------------------------------------------------
+
+def active_taxonomy(pdir: Path) -> Path | None:
+    """The project-local `<proposals dir>/tag-taxonomy.md` when it exists, else
+    the default beside this tool; the same choice the UI makes."""
+    for cand in (pdir / DEFAULT_TAXONOMY, Path(__file__).resolve().parent / DEFAULT_TAXONOMY):
+        if cand.is_file():
+            return cand
+    return None
+
+
+def taxonomy_tags(text: str) -> set[str]:
+    """Tag ids from the taxonomy's fenced ```yaml Machine Form, read by the same
+    shallow structure src/lib/taxonomy.js parses (a category is `- id:` at
+    indent <= 4; its tags are `- id:` lines under its `tags:` key)."""
+    start = text.find("```yaml\n")
+    if start < 0:
+        return set()
+    end = text.find("\n```", start + 8)
+    block = text[start + 8: end if end >= 0 else len(text)]
+    tags: set[str] = set()
+    in_tags = False
+    seen_category = False
+    for raw in block.split("\n"):
+        if not raw.strip():
+            continue
+        indent = len(raw) - len(raw.lstrip())
+        line = raw.strip()
+        if line.startswith("- id:") and indent <= 4:
+            seen_category, in_tags = True, False
+        elif not seen_category:
+            continue
+        elif line.startswith("tags:"):
+            in_tags = True
+        elif line.startswith("mutual-exclusion-groups:"):
+            in_tags = False
+        elif in_tags and line.startswith("- id:"):
+            tags.add(line[5:].strip())
+    return tags
+
+
+def warn_unknown_tags(proposal: dict, pdir: Path) -> int:
+    """Print one warning per tag (proposal-level or per file change) that the
+    active taxonomy does not list. Returns how many were printed; never fails."""
+    tax = active_taxonomy(pdir)
+    known = taxonomy_tags(tax.read_text(encoding="utf-8")) if tax else set()
+    if not known:
+        print(f"Warning: no taxonomy tags could be read "
+              f"({tax or 'no tag-taxonomy.md found'}); tags not checked", file=sys.stderr)
+        return 0
+    n = 0
+    places = [("proposal", proposal.get("tags") or [])]
+    places += [(fc.get("id", "?"), fc.get("tags") or []) for fc in proposal.get("file_changes") or []]
+    for where, tags in places:
+        for tag in tags:
+            if tag not in known:
+                print(f"Warning: {where}: tag '{tag}' is not in the active taxonomy ({tax}); "
+                      f"accepted as freeform", file=sys.stderr)
+                n += 1
+    return n
 
 
 # ---------------------------------------------------------------------------
@@ -233,6 +302,7 @@ def cmd_new(args, root: Path) -> int:
 
     path = write_proposal(pdir, proposal)
     print(f"Created: {path}")
+    warn_unknown_tags(proposal, pdir)
     return 0
 
 
@@ -259,6 +329,7 @@ def cmd_add_file(args, root: Path) -> int:
 
     path = write_proposal(pdir, proposal)
     print(f"Updated: {path}  ({seq} file(s) total)")
+    warn_unknown_tags(proposal, pdir)
     return 0
 
 
@@ -266,6 +337,7 @@ def cmd_validate(args, root: Path) -> int:
     pdir = proposals_dir(root, args.proposals_dir)
     _, proposal = load_proposal(pdir, args.proposal)
     errors = validate_proposal(proposal)
+    warn_unknown_tags(proposal, pdir)
     if errors:
         print(f"Validation FAILED ({len(errors)} error(s)):")
         for e in errors:

@@ -7,7 +7,7 @@
   "scripts": {
     "build": "node build.mjs",
     "dev": "node build.mjs --watch",
-    "test": "node test/diff.test.mjs && node test/resolve.test.mjs && node test/lint.test.mjs"
+    "test": "node test/diff.test.mjs && node test/resolve.test.mjs && node test/lint.test.mjs && python3 -m unittest discover -s test -p 'test_*.py'"
   },
   "dependencies": {
     "lucide": "^0.400.0"

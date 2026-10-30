@@ -51,7 +51,11 @@ python docket-propose.py validate --proposal prop-2026-06-21-001
 python docket-propose.py list --status open
 ```
 
-Proposals are JSON files committed to `rhiz-proposals/` in the governed repo.
+Proposals are JSON files committed to `rhiz-proposals/` in the governed repo. Their
+format is `schemas/proposal.schema.json` (JSON Schema 2020-12); `new`, `add-file` and
+`validate` check against that file, which must stay beside `docket-propose.py`. A proposal
+may name it in a `"$schema"` key for editor checking (the example in
+`examples/rhiz-proposals/` does); the tool does not require or write the key.
 
 ## Tag taxonomy
 

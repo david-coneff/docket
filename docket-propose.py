@@ -40,6 +40,9 @@ Usage:
 Content fields (before/after/agent-notes) are supplied as file paths so the
 agent never has to shell-escape multi-KB article bodies.
 
+Schema: new, add-file and validate check the proposal against
+schemas/proposal.schema.json beside this tool (the canonical format).
+
 Tags: new, add-file and validate print a warning (exit code unchanged) for each
 tag the active taxonomy does not list: rhiz-proposals/tag-taxonomy.md when it
 exists, else the tag-taxonomy.md beside this tool. Freeform tags are accepted.
@@ -59,16 +62,10 @@ from pathlib import Path
 DEFAULT_PROPOSALS_DIR = "rhiz-proposals"
 DEFAULT_TAXONOMY = "tag-taxonomy.md"
 
-VALID_STATUSES = {"open", "approved", "changes-requested", "rejected", "superseded"}
-VALID_FILE_STATUSES = {
-    "pending", "approved", "approved-working-draft",
-    "edited-commit-as-is", "edited-for-agent",
-    "changes-requested", "rejected",
-}
-VALID_EDIT_MODES = {"commit-as-is", "agent-feedback"}
+# The field vocabularies (statuses, weights, edit modes, comment roles) live in
+# schemas/proposal.schema.json; validate_proposal reads them from there.
 # Roadmap DP-1: how much of the lifecycle a proposal takes. The agent sets it; the reviewer
 # may override it in the UI (which keeps the agent's value in `weight_agent`).
-VALID_WEIGHTS = ("trivial", "standard", "significant")
 DEFAULT_WEIGHT = "standard"
 
 # rhiz-Core §1.2 — canonical hashing scope marker.
@@ -144,50 +141,83 @@ def warn_unknown_tags(proposal: dict, pdir: Path) -> int:
 # Schema validation
 # ---------------------------------------------------------------------------
 
-def validate_proposal(obj: dict) -> list[str]:
-    """Return a list of validation errors. Empty list = valid."""
-    errors = []
+SCHEMA_PATH = Path(__file__).resolve().parent / "schemas" / "proposal.schema.json"
 
-    for field in ("id", "title", "created", "status", "file_changes"):
-        if field not in obj:
-            errors.append(f"Missing required field: {field}")
+# The keywords the evaluator below implements. A schema that uses any other one is refused
+# rather than half-checked (annotation keywords are skipped).
+SCHEMA_KEYWORDS = {"type", "enum", "required", "properties", "items", "minItems",
+                   "minLength", "$ref", "if", "then"}
+SCHEMA_ANNOTATIONS = {"$schema", "$id", "$defs", "$comment", "title", "description"}
+JSON_TYPES = {
+    "object": lambda v: isinstance(v, dict),
+    "array": lambda v: isinstance(v, list),
+    "string": lambda v: isinstance(v, str),
+    "boolean": lambda v: isinstance(v, bool),
+    "integer": lambda v: isinstance(v, int) and not isinstance(v, bool),
+    "number": lambda v: isinstance(v, (int, float)) and not isinstance(v, bool),
+    "null": lambda v: v is None,
+}
 
-    if "status" in obj and obj["status"] not in VALID_STATUSES:
-        errors.append(f"Invalid status '{obj['status']}'. Must be one of: {VALID_STATUSES}")
 
-    # Optional: a proposal written before DP-1 has no weight and reads as standard.
-    for key in ("weight", "weight_agent"):
-        if key in obj and obj[key] not in VALID_WEIGHTS:
-            errors.append(f"Invalid {key} '{obj[key]}'. Must be one of: {', '.join(VALID_WEIGHTS)}")
+def load_schema(path: Path = SCHEMA_PATH) -> dict:
+    if not path.exists():
+        print(f"Error: proposal schema not found: {path} (ships beside this tool)", file=sys.stderr)
+        sys.exit(1)
+    return json.loads(path.read_text(encoding="utf-8"))
 
-    if "file_changes" in obj:
-        if not isinstance(obj["file_changes"], list) or len(obj["file_changes"]) == 0:
-            errors.append("'file_changes' must be a non-empty array")
-        else:
-            for i, fc in enumerate(obj["file_changes"]):
-                prefix = f"file_changes[{i}]"
-                for field in ("id", "path", "before", "after", "status"):
-                    if field not in fc:
-                        errors.append(f"{prefix}: missing required field '{field}'")
-                if "status" in fc and fc["status"] not in VALID_FILE_STATUSES:
-                    errors.append(
-                        f"{prefix}: invalid status '{fc['status']}'. "
-                        f"Must be one of: {VALID_FILE_STATUSES}"
-                    )
-                if "comments" in fc and not isinstance(fc["comments"], list):
-                    errors.append(f"{prefix}: 'comments' must be an array")
-                mode = fc.get("reviewer_edit_mode")
-                if mode is not None and mode not in VALID_EDIT_MODES:
-                    errors.append(
-                        f"{prefix}: invalid reviewer_edit_mode '{mode}'. "
-                        f"Must be one of: {VALID_EDIT_MODES}"
-                    )
-                if mode is not None and not fc.get("reviewer_edit"):
-                    errors.append(
-                        f"{prefix}: reviewer_edit_mode set but reviewer_edit is empty"
-                    )
 
+def schema_errors(value, node: dict, root: dict, where: str = "", key: str = "") -> list[str]:
+    """Check `value` against schema `node`: a minimal JSON Schema (2020-12) evaluator for
+    the keywords in SCHEMA_KEYWORDS. `where` is the JSON path for messages, `key` the name
+    of the property being checked."""
+    unknown = set(node) - SCHEMA_KEYWORDS - SCHEMA_ANNOTATIONS
+    if unknown:
+        raise ValueError(f"proposal schema uses unsupported keyword(s) {sorted(unknown)} at {where or '/'}")
+    at = f"{where}: " if where else ""
+    errors: list[str] = []
+    if "$ref" in node:
+        ref = node["$ref"]
+        if not ref.startswith("#/$defs/"):
+            raise ValueError(f"proposal schema: only local #/$defs/ refs are supported, got {ref}")
+        errors += schema_errors(value, root["$defs"][ref[len("#/$defs/"):]], root, where, key)
+    if "enum" in node and value not in node["enum"]:
+        allowed = ", ".join("null" if v is None else str(v) for v in node["enum"])
+        parent = where[: -len(key) - 1] if key and where.endswith(f".{key}") else ""
+        lead = f"{parent}: invalid" if parent else "Invalid"
+        errors.append(f"{lead} {key or where or 'value'} '{value}'. Must be one of: {allowed}")
+        return errors
+    if "type" in node:
+        types = node["type"] if isinstance(node["type"], list) else [node["type"]]
+        if not any(JSON_TYPES[t](value) for t in types):
+            errors.append(f"{where or 'proposal'}: must be {' or '.join(types)}")
+            return errors
+    if isinstance(value, dict):
+        for field in node.get("required", []):
+            if field not in value:
+                errors.append(f"{at}missing required field '{field}'" if where
+                              else f"Missing required field: {field}")
+        for name, sub in node.get("properties", {}).items():
+            if name in value:
+                child = f"{where}.{name}" if where else name
+                errors += schema_errors(value[name], sub, root, child, name)
+        if "if" in node and not schema_errors(value, node["if"], root, where, key):
+            errors += schema_errors(value, node.get("then", {}), root, where, key)
+    if isinstance(value, list):
+        if len(value) < node.get("minItems", 0):
+            errors.append(f"'{where}' must be a non-empty array" if node["minItems"] == 1
+                          else f"'{where}' must have at least {node['minItems']} items")
+        if "items" in node:
+            for i, item in enumerate(value):
+                errors += schema_errors(item, node["items"], root, f"{where}[{i}]")
+    if isinstance(value, str) and len(value) < node.get("minLength", 0):
+        errors.append(f"{where}: must not be empty")
     return errors
+
+
+def validate_proposal(obj: dict, schema: dict | None = None) -> list[str]:
+    """Return a list of validation errors against schemas/proposal.schema.json. Empty = valid."""
+    schema = schema if schema is not None else load_schema()
+    return schema_errors(obj, schema, schema)
 
 
 def new_file_change(file_id: str, path: str, rationale: str,
@@ -451,7 +481,8 @@ def main() -> int:
     p_new.add_argument("--rationale",        default="", help="Why this specific file is being changed")
     p_new.add_argument("--tags",             nargs="*", default=None, help="File-change-level tags")
     p_new.add_argument("--proposal-tags",    nargs="*", default=None, help="Proposal-level tags")
-    p_new.add_argument("--weight",           choices=VALID_WEIGHTS, default=DEFAULT_WEIGHT,
+    p_new.add_argument("--weight",           choices=load_schema()["$defs"]["weight"]["enum"],
+                       default=DEFAULT_WEIGHT,
                        help="DP-1 weight tier: trivial, standard (default) or significant")
     p_new.add_argument("--proposals-dir",    default=None)
 

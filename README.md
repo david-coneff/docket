@@ -4,6 +4,11 @@ Knowledge article approval workflow UI. Reviews agent-proposed changes to prose
 articles with word-level track-changes diffs, six-state file-change resolution,
 direct reviewer editing, and structured feedback artifacts for the agent.
 
+**docket on Kanboard** (2026-11-06): docket's active work is now a Kanboard plugin. It is a
+decision inbox for rhizome's work items, in [`kanboard/Docket/`](kanboard/Docket/README.md), and
+the design is [`docs/kanboard-docket-design.md`](docs/kanboard-docket-design.md). What happens to
+the article-review app below is a pending decision (`docket-memory:pando-0020`).
+
 ## Quick start
 
 ```sh

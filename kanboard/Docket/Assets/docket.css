@@ -1,0 +1,18 @@
+/* docket: the ruling form and the decision inbox. Kanboard's own colours, so both themes hold. */
+.docket-decision { margin-bottom: 20px; }
+.docket-ruling fieldset { border: 1px solid #ddd; border-radius: 4px; padding: 10px 15px; }
+.docket-ruling legend { font-weight: bold; padding: 0 5px; }
+.docket-option { display: block; margin: 6px 0; font-weight: normal; line-height: 1.4; }
+.docket-option input { margin-right: 6px; }
+.docket-other { margin-top: 10px; }
+.docket-excluded { opacity: 0.45; }
+.docket-hint { color: #888; font-size: 0.9em; margin-left: 4px; }
+.docket-ruling textarea { width: 100%; max-width: 700px; box-sizing: border-box; }
+.docket-state { padding: 8px 12px; border-radius: 4px; border-left: 4px solid #888; }
+.docket-submitted { border-left-color: #3366cc; }
+.docket-applied { border-left-color: #4caf50; }
+.docket-refused, .docket-stale { border-left-color: #d9534f; }
+.docket-row { border-bottom: 1px solid #eee; padding: 8px 0; }
+.docket-row summary { cursor: pointer; }
+.docket-ref { font-family: monospace; margin-right: 6px; }
+.docket-meta { display: block; color: #888; font-size: 0.9em; margin-left: 16px; }

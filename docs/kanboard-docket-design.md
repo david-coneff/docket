@@ -52,7 +52,7 @@ Nothing found forces a hard fork. A fork would also take on merging every upstre
 release, of which there were three in October 2026.
 
 So docket becomes:
-- **`kanboard/Docket/`**, a Kanboard plugin (PHP, namespace `Kanboard\Plugin\Docket`, MIT). It is
+- **`kanboard/Docket/`**, a Kanboard plugin (PHP, namespace `Kanboard\Plugin\Docket`). It is
   installed by copying it into Kanboard's `plugins/` directory. The web installer is off by
   default, and this design leaves it off.
 - **A pinned distribution:** rhizome's `setup-kanboard-env.sh` installs the pinned Kanboard
@@ -208,6 +208,9 @@ These are filed as a decision item:
 
 All of these were read on 2026-11-06.
 - **Kanboard:** MIT (`LICENSE` in kanboard/kanboard). There are no paid editions and no CLA.
-- **The Docket plugin:** MIT, like docket.
+- **The Docket plugin:** no licence, like the rest of docket. `package.json` is `"private": true` and
+  the repo has no LICENSE file. Kanboard's MIT licence lets a plugin carry any licence. Choosing one
+  is the operator's decision, and it matters only if docket is published. (An earlier version of this
+  design said "MIT, like docket". That was wrong, corrected 2026-11-06.)
 - **No third-party plugin is needed.** MetaMagik (MIT) would add custom fields, but task metadata
   plus this plugin's panel covers the same need without a lightly maintained dependency.

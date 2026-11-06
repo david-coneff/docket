@@ -81,9 +81,11 @@ The form is attached at `template:task:show:before-description` on any task whos
     BG-25 already accepts a Kanboard comment as the source of the operator's words (`pando-0527`):
     it re-fetches the comment by id and compares author and text.
   - **metadata `docket_ruling`**, a JSON object:
-    `{"options":[1,3],"other":false,"note":"<words>","comment_id":N,"user":"<login>","at":"<ISO>","brief":"<rhiz_decision_brief>"}`.
-    `brief` binds the pick to the brief it answered. A pick made against an older brief is shown
-    as stale and is not imported.
+    `{"options":[1,3],"other":false,"comment_id":N,"user":"<login>","at":"<ISO>","brief":"<rhiz_decision_brief>"}`.
+    - `brief` binds the pick to the brief it answered. A pick made against an older brief is shown
+      as stale and is not imported.
+    - The operator's words are not repeated here: they are the comment `comment_id` names. That
+      keeps the value under PostgreSQL's 255-character limit (section 4).
 
 ### 3.2 The ruling's delivery state
 
@@ -154,6 +156,17 @@ becomes a `rhiz_*` task-metadata key, which the panel of 3.4 shows. Who writes e
 The metadata keys follow Kanboard's advice to prefix by plugin
 (https://docs.kanboard.org/v1/plugins/metadata/).
 
+**Values in parts** (measured 2026-11-06, `pando-0544`):
+- **The limit:** Kanboard's PostgreSQL schema stores a metadata name in `varchar(50)` and a value in
+  `varchar(255)`. SQLite's are unbounded.
+- **Why it matters:** 823 of 11,082 `custom.*` values in this stream's stores are longer than 255
+  characters. The longest is 2,058, and decision options are often long.
+- **How a long value is stored:**
+  - `rhiz_<key>` holds `rhiz:chunks:<n>`;
+  - `rhiz_<key>#1` to `rhiz_<key>#<n>` hold the text in order.
+- **Who joins the parts:** the plugin's panel and ruling form join them before use, as
+  `unchunk_meta` does in rhizome's `tools/rhiz_work_kanboard.py`.
+
 ## 5. docket's schema, carried forward
 
 | docket (article review) | docket on Kanboard (decision inbox) |
@@ -162,7 +175,7 @@ The metadata keys follow Kanboard's advice to prefix by plugin
 | `file_changes[]`, each resolved on its own | `options[]` (`n`, `title`, `excludes`, `other`), each picked or not |
 | file-change states (approved, …, edited-for-agent) | picked / not picked; OTHER is the `edited-for-agent` case, where the reviewer's own text is what the agent acts on |
 | `comments[]` with a role (approval-note, change-request, …) | the ruling comment (`reference: docket:ruling`); later roles are possible as comment references |
-| `<id>.resolved.json` | metadata `docket_ruling` |
+| `<id>.resolved.json` | metadata `docket_ruling`, plus the ruling comment holding the words |
 | DP-2 delivery states (pending, in-flight, actioned, failed) | `docket_ruling_state` (submitted, applied, refused) |
 | weight tier (`weight`, `weight_agent`) | task priority, with `rhiz_priority` recording rhizome's value |
 | tag taxonomy | Kanboard tags. The process tags (blocked, stale, needs-agent-analysis) become tags the render may set |

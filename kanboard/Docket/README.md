@@ -22,6 +22,16 @@ decision brief. The design is [`docs/kanboard-docket-design.md`](../../docs/kanb
   - You can rule from each row.
   - Submissions not yet recorded by rhizome are listed separately.
 - **`decision:pending`** as a search filter on the board.
+- **The rhizome fields panel**, in the task sidebar under Information.
+  - It shows every `rhiz_*` key on the task, without the prefix, its parts joined. JSON values
+    are indented.
+  - It is read-only: rhizome writes these, and its work store in git is their source.
+- **`getDocketRulings(project_id?)`**, a JSON-RPC procedure.
+  - It returns every task whose `docket_ruling_state` is `submitted`, in one call: task id,
+    project, reference, title, the `docket_ruling` record, the task's current brief, and `stale`.
+  - With the application token it reads every project, or the one named.
+  - With a user's own login it reads only that user's projects. Naming a project the user cannot
+    see is refused with HTTP 403.
 
 **Data it reads and writes:**
 - **Reads:** rhizome's `rhiz_*` task metadata. A long value arrives in parts

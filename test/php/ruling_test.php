@@ -63,5 +63,19 @@ check('parts join back', Ruling::joinChunks(array(
     'rhiz_decision' => 'pending',
 )), array('rhiz_decision_options' => $long, 'rhiz_decision' => 'pending'));
 
+$panel = Ruling::fields(array(
+    'rhiz_uid' => 'abc123',
+    'rhiz_decision_options' => 'rhiz:chunks:2',
+    'rhiz_decision_options#1' => '[{"n":1,',
+    'rhiz_decision_options#2' => '"title":"Go"}]',
+    'docket_ruling_state' => 'submitted',
+    'rhiz_assignee' => 'pando',
+));
+check('the panel shows only rhiz_ keys, sorted, without the prefix',
+    array_map(function ($r) { return $r['name']; }, $panel), array('assignee', 'decision_options', 'uid'));
+check('a value in parts is joined for the panel', $panel[1]['value'], '[{"n":1,"title":"Go"}]');
+check('a JSON value is indented for reading', strpos($panel[1]['json'], "\n") !== false, true);
+check('a plain value has no JSON form', $panel[2]['json'], null);
+
 echo "ruling_test: $ran checks, $failed failed\n";
 exit($failed ? 1 : 0);

@@ -41,10 +41,16 @@ BRIEF = "2026-11-06T01:00:00Z"
 
 
 def rpc(method, **params):
+    return rpc_as({"user": "jsonrpc", "password": TOKEN}, method, **params)
+
+
+def rpc_as(cred, method, **params):
+    """A call with the application token (`jsonrpc`) or a user's own login and password."""
+    auth = f"{cred['user']}:{cred['password']}".encode()
     req = urllib.request.Request(URL, data=json.dumps(
         {"jsonrpc": "2.0", "method": method, "id": 1, "params": params}).encode(), headers={
         "Content-Type": "application/json",
-        "Authorization": "Basic " + base64.b64encode(f"jsonrpc:{TOKEN}".encode()).decode()})
+        "Authorization": "Basic " + base64.b64encode(auth).decode()})
     with urllib.request.urlopen(req, timeout=30) as r:
         doc = json.loads(r.read().decode())
     if "error" in doc:
@@ -215,6 +221,58 @@ class TheRulingForm(unittest.TestCase):
             self.assertIsNone(form_of(page, self.tid)[0])
         finally:
             rpc("saveTaskMetadata", task_id=self.tid, values={"rhiz_decision": "pending"})
+
+
+    def test_9a_the_fields_panel_shows_every_rhiz_key_joined_and_no_docket_key(self):
+        """docket-memory:pando-0019, design 3.4: read-only, in the task sidebar."""
+        page = self.task_page()
+        self.assertIn('class="docket-fields"', page)
+        self.assertIn("<dt>decision_brief</dt>", page)
+        self.assertIn("<dt>decision_options</dt>", page)
+        self.assertIn(OPTIONS[1]["title"], page.split('class="docket-fields"')[1],
+                      "the options' parts are joined in the panel")
+        self.assertNotIn("decision_options#1", page)
+        self.assertNotIn("<dt>docket_ruling", page, "the plugin's own keys are not rhizome's fields")
+
+    def test_9b_getDocketRulings_returns_the_submission_in_one_call(self):
+        """design 3.5, with the application token: every project, or the one named."""
+        for params in ({}, {"project_id": self.pid}):
+            rows = [r for r in rpc("getDocketRulings", **params) if r["task_id"] == self.tid]
+            self.assertEqual(len(rows), 1, params)
+            r = rows[0]
+            self.assertEqual((r["reference"], r["project_id"], r["brief"], r["stale"]),
+                             ("docket-memory:pando-9999", self.pid, BRIEF, False))
+            self.assertEqual(r["docket_ruling"]["options"], [2])
+        rpc("saveTaskMetadata", task_id=self.tid, values={"docket_ruling_state": "applied"})
+        try:
+            self.assertFalse([r for r in rpc("getDocketRulings", project_id=self.pid)],
+                             "an applied ruling is not read back again")
+        finally:
+            rpc("saveTaskMetadata", task_id=self.tid, values={"docket_ruling_state": "submitted"})
+
+    def test_9c_with_a_users_credentials_only_their_projects_are_read(self):
+        """A plugin procedure gets no project ACL from Kanboard; the callback checks it."""
+        name = "docket-test-viewer"
+        old = rpc("getUserByName", username=name)
+        if old:
+            rpc("removeUser", user_id=old["id"])
+        uid = rpc("createUser", username=name, password="docket-test-pw", role="app-user")
+        other = rpc("createProject", name="docket-plugin-test-other")
+        try:
+            as_user = dict(user=name, password="docket-test-pw")
+            self.assertEqual(rpc_as(as_user, "getDocketRulings"), [],
+                             "not a member of the fixture project: nothing of it is read")
+            rpc("addProjectUser", project_id=self.pid, user_id=uid, role="project-viewer")
+            rows = rpc_as(as_user, "getDocketRulings")
+            self.assertEqual([r["task_id"] for r in rows], [self.tid])
+            # The JSON-RPC server answers an AccessDeniedException with HTTP 403, as it does for
+            # Kanboard's own procedures.
+            with self.assertRaises(urllib.error.HTTPError) as denied:
+                rpc_as(as_user, "getDocketRulings", project_id=other)
+            self.assertEqual(denied.exception.code, 403)
+        finally:
+            rpc("removeProject", project_id=other)
+            rpc("removeUser", user_id=uid)
 
 
 @unittest.skipIf(not list(PREFIX.glob("root/usr/bin/php8*")), f"no PHP under {PREFIX}/root")

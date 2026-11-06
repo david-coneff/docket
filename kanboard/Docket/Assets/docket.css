@@ -16,3 +16,9 @@
 .docket-row summary { cursor: pointer; }
 .docket-ref { font-family: monospace; margin-right: 6px; }
 .docket-meta { display: block; color: #888; font-size: 0.9em; margin-left: 16px; }
+.docket-fields summary { cursor: pointer; }
+.docket-fields dl { margin: 6px 0 0 0; font-size: 0.9em; }
+.docket-fields dt { font-family: monospace; color: #888; margin-top: 6px; }
+.docket-fields dd { margin: 0 0 0 8px; overflow-wrap: anywhere; }
+.docket-fields pre { white-space: pre-wrap; margin: 0; font-size: 0.95em; }
+.docket-fields-note { color: #888; font-size: 0.85em; margin-top: 8px; }

@@ -107,6 +107,32 @@ class Ruling
         return $problems;
     }
 
+    /**
+     * The rhizome fields panel's rows (docs/kanboard-docket-design.md 3.4): every `rhiz_*` key,
+     * its parts joined, sorted by name, without the prefix. A JSON object or list value carries
+     * `json`, the same value indented for reading; any other value has `json` null.
+     */
+    public static function fields(array $meta)
+    {
+        $rows = array();
+        foreach (self::joinChunks($meta) as $key => $value) {
+            if (strncmp($key, 'rhiz_', 5) !== 0) {
+                continue;
+            }
+            $value = (string) $value;
+            $decoded = json_decode($value, true);
+            $rows[substr($key, 5)] = array(
+                'name' => substr($key, 5),
+                'value' => $value,
+                'json' => is_array($decoded) && $decoded
+                    ? json_encode($decoded, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)
+                    : null,
+            );
+        }
+        ksort($rows);
+        return array_values($rows);
+    }
+
     /** The picked numbers, as integers, sorted and without repeats. */
     public static function picked(array $values)
     {

@@ -129,6 +129,51 @@ class DecisionModel extends Base
         return array($open, $submitted);
     }
 
+    /**
+     * The read-back (docs/kanboard-docket-design.md 3.5): every task in `$project_ids` (null: every
+     * project) whose `docket_ruling_state` is `submitted`, with its reference, its ruling and the
+     * brief the task now carries, so the importer needs one call instead of one per task. `stale`
+     * says the ruling answered an earlier brief, which the importer does not record.
+     */
+    public function submittedRulings($project_ids = null)
+    {
+        if (is_array($project_ids) && ! $project_ids) {
+            return array();
+        }
+        $task_ids = $this->db->table(self::META_TABLE)
+            ->eq('name', 'docket_ruling_state')
+            ->eq('value', self::SUBMITTED)
+            ->findAllByColumn('task_id');
+        if (! $task_ids) {
+            return array();
+        }
+        $query = $this->db->table(TaskModel::TABLE)
+            ->columns('id', 'project_id', 'reference', 'title', 'is_active')
+            ->in('id', $task_ids)
+            ->asc('id');
+        if (is_array($project_ids)) {
+            $query->in('project_id', $project_ids);
+        }
+        $out = array();
+        foreach ($query->findAll() as $task) {
+            $meta = Ruling::joinChunks($this->taskMetadataModel->getAll($task['id']));
+            $record = isset($meta['docket_ruling']) ? $meta['docket_ruling'] : '';
+            $brief = isset($meta['rhiz_decision_brief']) ? $meta['rhiz_decision_brief'] : '';
+            $decoded = json_decode($record, true);
+            $out[] = array(
+                'task_id' => (int) $task['id'],
+                'project_id' => (int) $task['project_id'],
+                'reference' => $task['reference'],
+                'title' => $task['title'],
+                'is_active' => (int) $task['is_active'],
+                'docket_ruling' => is_array($decoded) ? $decoded : null,
+                'brief' => $brief,
+                'stale' => $record !== '' && Ruling::isStale($record, $brief),
+            );
+        }
+        return $out;
+    }
+
     /** The projects this user may see: all active ones for an administrator. */
     public function visibleProjectIds(array $user)
     {

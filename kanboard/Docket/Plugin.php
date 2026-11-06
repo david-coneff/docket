@@ -2,6 +2,7 @@
 
 namespace Kanboard\Plugin\Docket;
 
+use JsonRPC\Exception\AccessDeniedException;
 use Kanboard\Core\Plugin\Base;
 use Kanboard\Core\Security\Role;
 use Kanboard\Plugin\Docket\Filter\DecisionFilter;
@@ -20,6 +21,7 @@ class Plugin extends Base
     {
         $this->template->hook->attach('template:task:show:before-description', 'docket:task/ruling');
         $this->template->hook->attach('template:dashboard:sidebar', 'docket:dashboard/sidebar');
+        $this->template->hook->attach('template:task:sidebar:information', 'docket:task/fields');
         $this->hook->on('template:layout:css', array('template' => 'plugins/Docket/Assets/docket.css'));
         $this->hook->on('template:layout:js', array('template' => 'plugins/Docket/Assets/docket.js'));
 
@@ -33,6 +35,29 @@ class Plugin extends Base
             $builder->withFilter(DecisionFilter::getInstance()->setDatabase($c['db']));
             return $builder;
         });
+
+        $this->api->getProcedureHandler()->withClassAndMethod('getDocketRulings', $this);
+    }
+
+    /**
+     * JSON-RPC `getDocketRulings(project_id?)`: every submitted ruling, in one call (design 3.5).
+     * A plugin procedure gets no project ACL from Kanboard, so this checks it: with a user's
+     * credentials only that user's projects are read, and a named project they cannot see is
+     * refused; the application token reads every project, as Kanboard's own procedures do.
+     */
+    public function getDocketRulings($project_id = null)
+    {
+        $project_ids = $project_id === null || $project_id === '' ? null : array((int) $project_id);
+        if ($this->userSession->isLogged()) {
+            $user = $this->userSession->getAll();
+            $visible = $this->decisionModel->visibleProjectIds($user);
+            if ($project_ids === null) {
+                $project_ids = $visible;
+            } elseif (! in_array($project_ids[0], array_map('intval', $visible), true)) {
+                throw new AccessDeniedException('Project Access Denied');
+            }
+        }
+        return $this->decisionModel->submittedRulings($project_ids);
     }
 
     public function getClasses()

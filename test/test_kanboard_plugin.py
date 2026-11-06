@@ -197,6 +197,15 @@ class TheRulingForm(unittest.TestCase):
                            "search": "decision:pending"})
         self.assertIn("docket-memory:pando-9999", page)
 
+    def test_7b_an_applied_ruling_is_said_and_offers_no_form(self):
+        rpc("saveTaskMetadata", task_id=self.tid, values={"docket_ruling_state": "applied"})
+        try:
+            page = self.task_page()
+            self.assertIn("rhizome recorded your ruling (option 2)", page)
+            self.assertIsNone(form_of(page, self.tid)[0])
+        finally:
+            rpc("saveTaskMetadata", task_id=self.tid, values={"docket_ruling_state": "submitted"})
+
     def test_8_a_ruled_decision_shows_its_ruling_and_no_form(self):
         rpc("saveTaskMetadata", task_id=self.tid, values={"rhiz_decision": "ruled",
                                                           "rhiz_ruled_option": "2"})

@@ -31,7 +31,15 @@ $state = $decision['ruling_state'];
             <p class="docket-state docket-refused">
                 <?= t('rhizome refused the last ruling; its reason is in the comments. Rule again.') ?>
             </p>
+        <?php elseif ($state === 'applied'): ?>
+            <p class="docket-state docket-applied">
+                <?= t('rhizome recorded your ruling (option %s). This task leaves the decision column at the next render.',
+                    $this->text->e(implode(',', array_merge(array_map('strval', $decision['ruling']['options']),
+                        ! empty($decision['ruling']['other']) ? array('other') : array())))) ?>
+            </p>
         <?php endif ?>
-        <?= $this->render('docket:decision/form', array('task' => $task, 'decision' => $decision, 'back' => 'task')) ?>
+        <?php if ($state !== 'applied' || $decision['stale']): ?>
+            <?= $this->render('docket:decision/form', array('task' => $task, 'decision' => $decision, 'back' => 'task')) ?>
+        <?php endif ?>
     <?php endif ?>
 </section>

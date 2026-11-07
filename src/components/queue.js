@@ -2,6 +2,7 @@
 import { el } from '../lib/dom.js';
 import { sortProposals, isProposalReady, pendingCount } from '../lib/resolve.js';
 import { categoryOf } from '../lib/taxonomy.js';
+import { weightOf } from '../lib/weight.js';
 
 export function renderQueue(store, onDisposeSelected) {
   const panel = el('div.panel.queue');
@@ -58,7 +59,7 @@ export function renderQueue(store, onDisposeSelected) {
 
     item.append(header);
     item.append(el('div.qmeta', {
-      text: `${total} file(s) · ${pending > 0 ? `${pending} pending` : 'resolved'}`,
+      text: `${weightOf(d)} · ${total} file(s) · ${pending > 0 ? `${pending} pending` : 'resolved'}`,
     }));
 
     const chips = el('div.tag-chips', { style: 'margin-top:6px' });

@@ -4,7 +4,7 @@ import { icon } from '../lib/icon.js';
 import * as S from '../lib/storage.js';
 import { renderTags } from './tags.js';
 import { applyResolution, STATES, STATE_LABEL } from '../lib/resolve.js';
-import { lintHunk } from '../lib/lint.js';
+import { lintFileChange } from '../lib/lint.js';
 import { currentEditValue, editDiffersFromAfter, resetEditState } from './review.js';
 import { clearDraft } from '../lib/store.js';
 
@@ -81,7 +81,7 @@ export function renderContextFeedback(store, onResolve, onChange) {
   panel.append(collapsible('Edit note', enWrap, 'dkt:ui.cf.editnote'));
 
   // Lint gate (always visible)
-  const lint = lintHunk(fc);
+  const lint = lintFileChange(fc, store.activeProposal()?.file_changes || null);
   const gate = el(`div.lint-gate${lint.errors.length ? '' : ' clean'}`);
   if (!lint.errors.length && !lint.warnings.length) {
     gate.append(icon('check-circle', 13), document.createTextNode(' rhiz-lint: clean'));

@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "docket proposal artifact",
+  "description": "A proposal (rhiz-proposals/<id>.proposal.json) and its resolved form (<id>.resolved.json, the same object after review). docket-propose.py validates against this file; it uses only the keywords that tool's evaluator implements (type, enum, required, properties, items, minItems, minLength, $ref, if/then), so extend the evaluator before using another. Unlisted fields are allowed: an older or newer writer's extra field is not an error.",
+  "type": "object",
+  "required": ["id", "title", "created", "status", "file_changes"],
+  "properties": {
+    "$schema": { "type": "string" },
+    "id": { "type": "string", "minLength": 1, "description": "prop-YYYY-MM-DD-NNN; also the file name stem." },
+    "title": { "type": "string" },
+    "created": { "type": "string", "description": "ISO 8601 timestamp, UTC." },
+    "status": {
+      "enum": ["open", "approved", "changes-requested", "rejected", "superseded"],
+      "description": "open: awaiting review. changes-requested: the agent owes a revision. approved / rejected: dispositioned. superseded: replaced by a later proposal."
+    },
+    "tags": { "type": "array", "items": { "type": "string" } },
+    "weight": { "$ref": "#/$defs/weight" },
+    "weight_agent": { "$ref": "#/$defs/weight", "description": "The agent's weight, kept when the reviewer overrides `weight`." },
+    "agent_notes": { "type": "string" },
+    "file_changes": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/file_change" } }
+  },
+  "$defs": {
+    "weight": {
+      "enum": ["trivial", "standard", "significant"],
+      "description": "Roadmap DP-1. trivial: typo, formatting or link fix, approve commits it. standard: proposal, disposition, action. significant: intent, architecture or hypothesis, the full cycle. Absent reads as standard."
+    },
+    "file_change": {
+      "type": "object",
+      "required": ["id", "path", "before", "after", "status"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "path": { "type": "string", "minLength": 1, "description": "The file the change writes, relative to the governed repo." },
+        "rationale": { "type": "string" },
+        "before": { "type": "string", "description": "Full original content; empty for a new file." },
+        "after": { "type": "string", "description": "Full proposed content." },
+        "status": {
+          "enum": ["pending", "approved", "approved-working-draft", "edited-commit-as-is", "edited-for-agent", "changes-requested", "rejected"],
+          "description": "pending: unreviewed. approved: commit `after`. approved-working-draft: commit `after`, tagged working-draft. edited-commit-as-is: commit `reviewer_edit`. edited-for-agent: `reviewer_edit` is feedback for the agent. changes-requested: the agent revises. rejected: not committed."
+        },
+        "tags": { "type": "array", "items": { "type": "string" } },
+        "reviewer_edit": { "type": ["string", "null"] },
+        "reviewer_edit_mode": {
+          "enum": ["commit-as-is", "agent-feedback", null],
+          "description": "commit-as-is: the edit is final. agent-feedback: the edit is for the agent to reason about. null: no edit."
+        },
+        "reviewer_edit_notes": { "type": ["string", "null"] },
+        "comments": { "type": "array", "items": { "$ref": "#/$defs/comment" } }
+      },
+      "if": { "required": ["reviewer_edit_mode"], "properties": { "reviewer_edit_mode": { "type": "string" } } },
+      "then": { "required": ["reviewer_edit"], "properties": { "reviewer_edit": { "type": "string", "minLength": 1 } } }
+    },
+    "comment": {
+      "type": "object",
+      "required": ["id", "role", "text"],
+      "properties": {
+        "id": { "type": "string" },
+        "created": { "type": "string" },
+        "role": {
+          "enum": ["approval-note", "change-request", "rejection-rationale", "edit-note", "general"],
+          "description": "approval-note, change-request, rejection-rationale and edit-note accompany the matching resolution; general carries attachments or a note with no resolution."
+        },
+        "text": { "type": "string" },
+        "attachments": { "type": "array", "items": { "$ref": "#/$defs/attachment" } }
+      }
+    },
+    "attachment": {
+      "type": "object",
+      "required": ["filename", "path"],
+      "properties": {
+        "filename": { "type": "string" },
+        "mime_type": { "type": "string" },
+        "path": { "type": "string", "description": "A file-path reference, never an inline blob." }
+      }
+    }
+  }
+}

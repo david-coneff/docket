@@ -4,6 +4,11 @@ Knowledge article approval workflow UI. Reviews agent-proposed changes to prose
 articles with word-level track-changes diffs, six-state file-change resolution,
 direct reviewer editing, and structured feedback artifacts for the agent.
 
+**docket on Kanboard** (2026-11-06): docket's active work is now a Kanboard plugin. It is a
+decision inbox for rhizome's work items, in [`kanboard/Docket/`](kanboard/Docket/README.md), and
+the design is [`docs/kanboard-docket-design.md`](docs/kanboard-docket-design.md). What happens to
+the article-review app below is a pending decision (`docket-memory:pando-0020`).
+
 ## Quick start
 
 ```sh
@@ -51,7 +56,11 @@ python docket-propose.py validate --proposal prop-2026-06-21-001
 python docket-propose.py list --status open
 ```
 
-Proposals are JSON files committed to `rhiz-proposals/` in the governed repo.
+Proposals are JSON files committed to `rhiz-proposals/` in the governed repo. Their
+format is `schemas/proposal.schema.json` (JSON Schema 2020-12); `new`, `add-file` and
+`validate` check against that file, which must stay beside `docket-propose.py`. A proposal
+may name it in a `"$schema"` key for editor checking (the example in
+`examples/rhiz-proposals/` does); the tool does not require or write the key.
 
 ## Tag taxonomy
 

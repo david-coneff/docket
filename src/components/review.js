@@ -4,6 +4,7 @@ import { renderDiff, renderLayeredDiff } from '../lib/diffRender.js';
 import { renderMarkdown } from '../lib/markdown.js';
 import { saveDraft, loadDraft } from '../lib/store.js';
 import { STATE_ICON, STATE_LABEL, bulkApply, STATES } from '../lib/resolve.js';
+import { WEIGHTS, WEIGHT_HINT, weightOf, setWeight } from '../lib/weight.js';
 
 export const reviewUI = { tab: 'composed', granularity: 'auto', diffMyEdits: false, editValue: null, bulkMenuOpen: false };
 
@@ -41,8 +42,20 @@ export function renderReview(store, onChange, onBulkResolve) {
     } }),
   ]);
 
+  // Weight tier (DP-1): the agent's value, which the reviewer may override.
+  const weightSel = el('select.weight-select', {
+    title: WEIGHT_HINT[weightOf(proposal)],
+    onchange: (e) => { setWeight(proposal, e.target.value); onChange(); },
+  });
+  WEIGHTS.forEach((w) => {
+    const opt = el('option', { value: w, text: w, title: WEIGHT_HINT[w] });
+    if (w === weightOf(proposal)) opt.selected = true;
+    weightSel.append(opt);
+  });
+
   panel.append(el('div.file-list-header', {}, [
     el('span', { text: `${changes.length} file(s)` }),
+    el('label.weight-label', { text: 'Weight ' }, [weightSel]),
     bulkWrap,
   ]));
 

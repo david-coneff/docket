@@ -204,6 +204,21 @@ These are filed as a decision item:
    it, shelve it, or retire it?
 3. The journal in the board: briefs and rulings only (the default above), or every entry?
 
+**Ruled 2026-11-07** (`docket-memory:pando-0020`, options 1, 3 and 5, with a note):
+1. **A plugin on a pinned stock Kanboard** (this design's section 2). No hard fork; changes
+   Kanboard itself would need go upstream as pull requests.
+2. **The article-review app stays, shelved.** Its unfinished items (`pando-0001`, `-0006`,
+   `-0007`, `-0008`) wait on the operator's word; its roadmap items (`pando-0009`, `-0010`,
+   `-0012` to `-0015`) are rejected as superseded by the plugin; its finished items (`pando-0003`,
+   `-0004`, `-0011`) are released to run their live checks.
+3. **Every journal entry may reach the board, lazily.** The operator's words: "let's make journal
+   entries something that is not immediately retrieved in full, and instead lazy-loaded after the
+   user chooses to uncollapse history past a certain default amount that is always
+   retrieved/shown expanded to begin with (let's say three entries for a starting default)". How
+   to keep that within bounds for long journals is a separate decision, filed on the protocol's
+   render item (`pando-0544`) with measurements; until it is ruled, the board keeps rendering
+   briefs and rulings only.
+
 ## 8. Licences
 
 All of these were read on 2026-11-06.

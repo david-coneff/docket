@@ -41,5 +41,6 @@ $state = $decision['ruling_state'];
         <?php if ($state !== 'applied' || $decision['stale']): ?>
             <?= $this->render('docket:decision/form', array('task' => $task, 'decision' => $decision, 'back' => 'task')) ?>
         <?php endif ?>
+        <?= $this->render('docket:task/rebrief', array('task' => $task)) ?>
     <?php endif ?>
 </section>

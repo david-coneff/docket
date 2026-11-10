@@ -150,7 +150,7 @@ becomes a `rhiz_*` task-metadata key, which the panel of 3.4 shows. Who writes e
 | live_check_*, reanalyze_*, closed-by, source, env_check, ... | metadata `rhiz_<key>`, one per field, with structured values as JSON | OpenProject's `customFields` carried the whole `custom` map; this restores it |
 | uid | metadata `rhiz_uid` | |
 | external.github | **external link** (web link) | |
-| journal | comments, for **decision briefs and rulings only** (`reference` = `rhiz:journal:<ts>`) | OpenProject rendered the whole journal as activities. Here the full journal stays in git, and the panel links to it. Rendering all of it is filed as a question (section 7) |
+| journal | comments for decision briefs and rulings (`reference` = `rhiz:journal:<ts>`), and **every row** in the plugin's History section (section 7, item 3) | OpenProject rendered the whole journal as activities. Here the History section shows the newest three people's entries and pages the rest from the plugin's own table |
 | closed items | closed tasks | Already closed when their item closes |
 
 The metadata keys follow Kanboard's advice to prefix by plugin
@@ -216,8 +216,13 @@ These are filed as a decision item:
    user chooses to uncollapse history past a certain default amount that is always
    retrieved/shown expanded to begin with (let's say three entries for a starting default)". How
    to keep that within bounds for long journals is a separate decision, filed on the protocol's
-   render item (`pando-0544`) with measurements; until it is ruled, the board keeps rendering
-   briefs and rulings only.
+   render item (`pando-0544`) with measurements. RULED 2026-11-10 (options 1-5) and BUILT: every
+   row goes to the plugin's `docket_journal` table (the render syncs it incrementally, option
+   5(a)); a task shows its newest three MEANINGFUL entries (creation, status moves, amends, plain
+   comments, briefs, rulings); system entries come behind a toggle, runs of one kind folded into
+   one line; each entry is capped at 600 characters with "show all"; older history is paged, 20
+   entries or 64 KB at a time (`kanboard/Docket/Lib/Journal.php`). Briefs and rulings are ALSO
+   still comments.
 
 ## 8. Licences
 

@@ -22,6 +22,7 @@ class Plugin extends Base
         $this->template->hook->attach('template:task:show:before-description', 'docket:task/ruling');
         $this->template->hook->attach('template:dashboard:sidebar', 'docket:dashboard/sidebar');
         $this->template->hook->attach('template:task:sidebar:information', 'docket:task/fields');
+        $this->template->hook->attach('template:task:show:before-comments', 'docket:task/history');
         $this->hook->on('template:layout:css', array('template' => 'plugins/Docket/Assets/docket.css'));
         $this->hook->on('template:layout:js', array('template' => 'plugins/Docket/Assets/docket.js'));
 
@@ -30,6 +31,8 @@ class Plugin extends Base
         // A viewer may read a decision; ruling on one takes a project member.
         $this->projectAccessMap->add('DecisionController', 'save', Role::PROJECT_MEMBER);
         $this->applicationAccessMap->add('DecisionController', 'inbox', Role::APP_USER);
+        // A task's history is read by whoever may see the task.
+        $this->projectAccessMap->add('JournalController', '*', Role::PROJECT_VIEWER);
 
         $this->container->extend('taskLexer', function ($builder, $c) {
             $builder->withFilter(DecisionFilter::getInstance()->setDatabase($c['db']));
@@ -37,6 +40,38 @@ class Plugin extends Base
         });
 
         $this->api->getProcedureHandler()->withClassAndMethod('getDocketRulings', $this);
+        $this->api->getProcedureHandler()->withClassAndMethod('getDocketJournalHeads', $this);
+        $this->api->getProcedureHandler()->withClassAndMethod('saveDocketJournal', $this);
+    }
+
+    /**
+     * JSON-RPC `getDocketJournalHeads(project_id)`: [{task_id, n, key}] for every task of the
+     * project holding journal rows: how many, and the last row's chained key. rhizome's render
+     * reads it to send only what each task lacks (rhizome pando-0544). The application token only:
+     * the journal is rhizome's to write, never a user's.
+     */
+    public function getDocketJournalHeads($project_id)
+    {
+        $this->refuseUsers();
+        return $this->journalModel->heads($project_id);
+    }
+
+    /**
+     * JSON-RPC `saveDocketJournal(task_id, rows, replace)`: store rows after those the task holds
+     * (or in place of them all with `replace`); returns how many rows the task then holds. Rows
+     * that do not run on from what is held are refused whole, with why (a JSON-RPC error).
+     */
+    public function saveDocketJournal($task_id, array $rows, $replace = false)
+    {
+        $this->refuseUsers();
+        return $this->journalModel->save($task_id, $rows, (bool) $replace);
+    }
+
+    private function refuseUsers()
+    {
+        if ($this->userSession->isLogged()) {
+            throw new AccessDeniedException('The journal is written by rhizome\'s render, with the application token');
+        }
     }
 
     /**
@@ -63,7 +98,7 @@ class Plugin extends Base
     public function getClasses()
     {
         return array(
-            'Plugin\Docket\Model' => array('DecisionModel'),
+            'Plugin\Docket\Model' => array('DecisionModel', 'JournalModel'),
         );
     }
 
@@ -84,7 +119,7 @@ class Plugin extends Base
 
     public function getPluginVersion()
     {
-        return '0.1.0';
+        return '0.2.0';
     }
 
     public function getPluginHomepage()

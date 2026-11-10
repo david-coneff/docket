@@ -394,6 +394,81 @@ class TheJournalHistory(unittest.TestCase):
             rpc("removeUser", user_id=uid)
 
 
+@unittest.skipIf(_why_not_ready(), _why_not_ready())
+class TheRebriefButton(unittest.TestCase):
+    """rhizome pando-0555 (option 1): a project member asks for a fresh brief on one pending
+    decision; the request is recorded on the task, rhizome's poll reads every open one in one call
+    with the application token, and moves it on (queued, done, failed)."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.pid = rpc("createProject", name="docket-rebrief-test")
+        uid = rpc("getUserByName", username=OPERATOR)["id"]
+        rpc("addProjectUser", project_id=cls.pid, user_id=uid)
+        cls.tid = rpc("createTask", project_id=cls.pid, title="docket-memory:pando-9998 — Pick",
+                      reference="docket-memory:pando-9998")
+        meta = {"rhiz_decision": "pending", "rhiz_decision_brief": BRIEF}
+        meta.update(chunked("rhiz_decision_options", json.dumps(OPTIONS, separators=(",", ":"))))
+        rpc("saveTaskMetadata", task_id=cls.tid, values=meta)
+        cls.plain = rpc("createTask", project_id=cls.pid, title="no decision here",
+                        reference="docket-memory:pando-9997")
+        cls.b = Browser()
+        cls.b.login()
+
+    @classmethod
+    def tearDownClass(cls):
+        rpc("removeProject", project_id=cls.pid)
+
+    def page(self, tid=None):
+        return self.b.get({"controller": "TaskViewController", "action": "show",
+                           "task_id": tid or self.tid})
+
+    def press(self):
+        m = re.search(r'href="([^"]*RebriefController[^"]*)"', self.page())
+        self.assertIsNotNone(m, "a pending decision offers the Re-brief button")
+        return self.b.get(dict(urllib.parse.parse_qsl(urllib.parse.urlsplit(
+            html.unescape(m.group(1))).query)))
+
+    def open_here(self):
+        return [r for r in rpc("getDocketRebriefRequests", project_id=self.pid)]
+
+    def test_1_only_a_pending_decision_offers_it(self):
+        self.assertIn("Re-brief this decision", self.page())
+        self.assertNotIn("Re-brief this decision", self.page(self.plain))
+
+    def test_2_pressing_it_records_one_open_request_the_poll_reads(self):
+        self.press()
+        rec = json.loads(rpc("getTaskMetadata", task_id=self.tid)["docket_rebrief"])
+        self.assertEqual((rec["state"], rec["by"]), ("requested", OPERATOR))
+        reqs = self.open_here()
+        self.assertEqual([(r["task_id"], r["reference"]) for r in reqs],
+                         [(self.tid, "docket-memory:pando-9998")])
+        page = self.page()
+        self.assertIn("Re-brief requested by", page)
+        self.assertNotIn("Re-brief this decision", page, "not offered again while open")
+
+    def test_3_rhizome_moves_it_on_and_a_closed_request_leaves_the_poll(self):
+        rec = rpc("setDocketRebriefState", task_id=self.tid, state="queued", note="")
+        self.assertEqual(rec["state"], "queued")
+        self.assertIn("Re-brief in progress", self.page())
+        self.assertEqual(len(self.open_here()), 1, "queued is still open")
+        rpc("setDocketRebriefState", task_id=self.tid, state="failed", note="z" * 300)
+        rec = json.loads(rpc("getTaskMetadata", task_id=self.tid)["docket_rebrief"])
+        self.assertEqual((rec["state"], len(rec["note"])), ("failed", 100), "the note is capped")
+        self.assertEqual(self.open_here(), [])
+        page = self.page()
+        self.assertIn("The last re-brief failed", page)
+        self.assertIn("Re-brief this decision", page, "offered again once it ended")
+
+    def test_4_a_bad_state_or_a_users_credentials_are_refused(self):
+        with self.assertRaises(RuntimeError):
+            rpc("setDocketRebriefState", task_id=self.tid, state="nonsense")
+        with self.assertRaises(RuntimeError):
+            rpc("setDocketRebriefState", task_id=self.plain, state="done")
+        with self.assertRaises((RuntimeError, urllib.error.HTTPError)):
+            rpc_as({"user": OPERATOR, "password": PASSWORD}, "getDocketRebriefRequests")
+
+
 @unittest.skipIf(not list(PREFIX.glob("root/usr/bin/php8*")), f"no PHP under {PREFIX}/root")
 class TheRulingRules(unittest.TestCase):
     """test/php/ruling_test.php and journal_test.php, with the PHP the setup script installs."""

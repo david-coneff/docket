@@ -42,6 +42,16 @@ decision brief. The design is [`docs/kanboard-docket-design.md`](../../docs/kanb
     row before it. The render then sends only the rows a task lacks, or all of them when the
     prefix changed.
   - Rows that do not continue from what is held are refused whole.
+- **A Re-brief button** under a pending decision (rhizome `pando-0555`): a project member asks for
+  a fresh, re-verified brief on that one decision.
+  - The request is stored on the task as `docket_rebrief`: its state, who asked, when, and a note of
+    at most 100 characters. States: `requested` (not yet picked up), `queued` (handed to rhizome's
+    briefing stream), `done` (a new brief was filed; it reaches the task with the next render),
+    `failed` (the note says why).
+  - While a request is `requested` or `queued`, the task shows its state instead of the button.
+  - **`getDocketRebriefRequests(project_id?)`** returns every open request, oldest first, and
+    **`setDocketRebriefState(task_id, state, note?)`** moves one on. Both take the application
+    token only: they are for rhizome's poll.
 - **`getDocketRulings(project_id?)`**, a JSON-RPC procedure.
   - It returns every task whose `docket_ruling_state` is `submitted`, in one call: task id,
     project, reference, title, the `docket_ruling` record, the task's current brief, and `stale`.

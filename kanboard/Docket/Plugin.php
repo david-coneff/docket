@@ -30,6 +30,8 @@ class Plugin extends Base
 
         // A viewer may read a decision; ruling on one takes a project member.
         $this->projectAccessMap->add('DecisionController', 'save', Role::PROJECT_MEMBER);
+        // So does asking for a re-brief (rhizome pando-0555).
+        $this->projectAccessMap->add('RebriefController', 'request', Role::PROJECT_MEMBER);
         $this->applicationAccessMap->add('DecisionController', 'inbox', Role::APP_USER);
         // A task's history is read by whoever may see the task.
         $this->projectAccessMap->add('JournalController', '*', Role::PROJECT_VIEWER);
@@ -42,6 +44,8 @@ class Plugin extends Base
         $this->api->getProcedureHandler()->withClassAndMethod('getDocketRulings', $this);
         $this->api->getProcedureHandler()->withClassAndMethod('getDocketJournalHeads', $this);
         $this->api->getProcedureHandler()->withClassAndMethod('saveDocketJournal', $this);
+        $this->api->getProcedureHandler()->withClassAndMethod('getDocketRebriefRequests', $this);
+        $this->api->getProcedureHandler()->withClassAndMethod('setDocketRebriefState', $this);
     }
 
     /**
@@ -65,6 +69,27 @@ class Plugin extends Base
     {
         $this->refuseUsers();
         return $this->journalModel->save($task_id, $rows, (bool) $replace);
+    }
+
+    /**
+     * JSON-RPC `getDocketRebriefRequests(project_id?)`: every OPEN re-brief request (requested or
+     * queued), oldest first, in one call (rhizome pando-0555). The application token only: the
+     * poll that reads it is rhizome's.
+     */
+    public function getDocketRebriefRequests($project_id = null)
+    {
+        $this->refuseUsers();
+        return $this->rebriefModel->openRequests($project_id === null || $project_id === '' ? null : array((int) $project_id));
+    }
+
+    /**
+     * JSON-RPC `setDocketRebriefState(task_id, state, note?)`: rhizome moves a request on
+     * (queued, done or failed); returns the record. The application token only.
+     */
+    public function setDocketRebriefState($task_id, $state, $note = '')
+    {
+        $this->refuseUsers();
+        return $this->rebriefModel->setState((int) $task_id, (string) $state, (string) $note);
     }
 
     private function refuseUsers()
@@ -98,7 +123,7 @@ class Plugin extends Base
     public function getClasses()
     {
         return array(
-            'Plugin\Docket\Model' => array('DecisionModel', 'JournalModel'),
+            'Plugin\Docket\Model' => array('DecisionModel', 'JournalModel', 'RebriefModel'),
         );
     }
 
@@ -119,7 +144,7 @@ class Plugin extends Base
 
     public function getPluginVersion()
     {
-        return '0.2.0';
+        return '0.3.0';
     }
 
     public function getPluginHomepage()

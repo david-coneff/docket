@@ -24,6 +24,8 @@ class Journal
     const PAGE_BYTES = 65536;
     const CAP = 600;
     const FETCH = 200;
+    // "no upper bound" for seq, as a 32-bit integer column holds it
+    const NO_BOUND = 2147483647;
 
     /**
      * The first $cap characters of $text: [shown, truncated]. Characters, not bytes, and never a

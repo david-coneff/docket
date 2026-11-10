@@ -21,6 +21,7 @@ import os
 import re
 import subprocess
 import unittest
+import urllib.error
 import urllib.parse
 import urllib.request
 from pathlib import Path
@@ -275,17 +276,141 @@ class TheRulingForm(unittest.TestCase):
             rpc("removeUser", user_id=uid)
 
 
+def journal(n_people=5, n_rechecks=4):
+    """Rows as rhizome's render sends them (rhizome pando-0544): people's entries with a run of
+    rechecks before the newest, and one entry long enough to be capped."""
+    rows = []
+    for i in range(n_people):
+        rows.append({"cls": "meaningful", "grp": "", "kind": "comment", "head": "comment",
+                     "text": f"said {i + 1}" + (" " + "z" * 2000 if i == 0 else "")})
+    for i in range(n_rechecks):
+        rows.insert(n_people - 1, {"cls": "system", "grp": "recheck", "kind": "comment",
+                                   "head": "comment", "text": f"recheck: still blocked {i}"})
+    for seq, r in enumerate(rows, start=1):
+        r.update(seq=seq, key=f"k{seq:04d}", ts=f"2026-11-10T00:00:{seq:02d}Z", actor="pando")
+    return rows
+
+
+@unittest.skipIf(_why_not_ready(), _why_not_ready())
+class TheJournalHistory(unittest.TestCase):
+    """rhizome pando-0544, the operator's ruling 2026-11-10 (options 1-5): every journal row in the
+    plugin's own table, the newest three people's entries on the task, the rest paged."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.pid = rpc("createProject", name="docket-journal-test")
+        uid = rpc("getUserByName", username=OPERATOR)["id"]
+        rpc("addProjectUser", project_id=cls.pid, user_id=uid)
+        cls.tid = rpc("createTask", project_id=cls.pid, title="docket-memory:pando-9998 — Long",
+                      reference="docket-memory:pando-9998")
+        cls.rows = journal()
+        cls.b = Browser()
+        cls.b.login()
+
+    @classmethod
+    def tearDownClass(cls):
+        rpc("removeProject", project_id=cls.pid)
+
+    def setUp(self):
+        self.assertEqual(rpc("saveDocketJournal", task_id=self.tid, rows=self.rows, replace=True),
+                         len(self.rows))
+
+    def history(self, **q):
+        q = dict({"controller": "JournalController", "action": "history", "plugin": "Docket",
+                  "task_id": self.tid, "project_id": self.pid}, **q)
+        return json.loads(self.b.get(q))
+
+    def test_1_heads_name_the_count_and_last_key(self):
+        heads = [h for h in rpc("getDocketJournalHeads", project_id=self.pid)]
+        self.assertEqual(heads, [{"task_id": self.tid, "n": 9, "key": "k0009"}])
+
+    def test_2_rows_that_do_not_run_on_are_refused_whole(self):
+        gap = [dict(self.rows[0], seq=11, key="k0011")]
+        with self.assertRaises(RuntimeError):
+            rpc("saveDocketJournal", task_id=self.tid, rows=gap)
+        self.assertEqual(rpc("getDocketJournalHeads", project_id=self.pid)[0]["n"], 9)
+        more = [dict(self.rows[0], seq=10, key="k0010", text="said again")]
+        self.assertEqual(rpc("saveDocketJournal", task_id=self.tid, rows=more), 10)
+
+    def test_3_a_user_cannot_write_or_read_the_heads(self):
+        with self.assertRaises(urllib.error.HTTPError) as denied:
+            rpc_as({"user": OPERATOR, "password": PASSWORD}, "saveDocketJournal",
+                   task_id=self.tid, rows=[], replace=True)
+        self.assertEqual(denied.exception.code, 403)
+
+    def test_4_the_task_shows_the_newest_three_peoples_entries(self):
+        page = self.b.get({"controller": "TaskViewController", "action": "show", "task_id": self.tid})
+        self.assertIn('class="docket-history"', page)
+        part = page.split('class="docket-history-list"')[1].split("</ol>")[0]
+        self.assertEqual(re.findall(r'data-seq="(\d+)"', part), ["9", "4", "3"],
+                         "the rechecks (seq 5-8) are not counted")
+        self.assertNotIn("recheck: still blocked", part)
+        self.assertIn("show older", page)
+
+    def test_5_older_pages_go_on_and_end(self):
+        first = self.history(system=0, before=3, limit=20)
+        self.assertEqual(re.findall(r'data-seq="(\d+)"', first["html"]), ["2", "1"])
+        self.assertFalse(first["more"])
+        self.assertIn("show all (2.0 KB)", first["html"], "the 2 KB entry is capped")
+
+    def test_6_system_entries_fold_into_one_run_that_opens(self):
+        h = self.history(system=1, collapse=1, limit=3)
+        self.assertIn("recheck ×4", h["html"])
+        self.assertTrue(h["more"])
+        run = self.history(system=1, collapse=0, lo=5, before=9, limit=20)
+        self.assertEqual(re.findall(r'data-seq="(\d+)"', run["html"]), ["8", "7", "6", "5"])
+
+    def test_7_the_full_words_of_a_capped_entry(self):
+        q = {"controller": "JournalController", "action": "entry", "plugin": "Docket",
+             "task_id": self.tid, "project_id": self.pid, "seq": 1}
+        self.assertEqual(json.loads(self.b.get(q))["text"], self.rows[0]["text"])
+
+    def test_8_text_is_shown_escaped(self):
+        rpc("saveDocketJournal", task_id=self.tid, replace=True,
+            rows=[dict(self.rows[0], text="<script>alert(1)</script>")])
+        page = self.b.get({"controller": "TaskViewController", "action": "show", "task_id": self.tid})
+        self.assertIn("&lt;script&gt;alert(1)&lt;/script&gt;", page)
+        self.assertNotIn("<script>alert(1)</script>", page)
+
+    def test_9_a_viewer_of_another_project_reads_nothing(self):
+        name = "docket-journal-viewer"
+        old = rpc("getUserByName", username=name)
+        if old:
+            rpc("removeUser", user_id=old["id"])
+        uid = rpc("createUser", username=name, password="docket-test-pw", role="app-user")
+        try:
+            b = Browser()
+            page = b.get({"controller": "AuthController", "action": "login"})
+            token = re.search(r'name="csrf_token" value="([^"]+)"', page).group(1)
+            b.post(BASE + "?controller=AuthController&action=check",
+                   {"csrf_token": token, "username": name, "password": "docket-test-pw"})
+            try:
+                body = b.get({"controller": "JournalController", "action": "history",
+                              "plugin": "Docket", "task_id": self.tid, "project_id": self.pid})
+            except urllib.error.HTTPError as exc:
+                body = str(exc.code)
+            self.assertNotIn("said", body)
+        finally:
+            rpc("removeUser", user_id=uid)
+
+
 @unittest.skipIf(not list(PREFIX.glob("root/usr/bin/php8*")), f"no PHP under {PREFIX}/root")
 class TheRulingRules(unittest.TestCase):
-    """test/php/ruling_test.php, with the PHP the setup script installs."""
+    """test/php/ruling_test.php and journal_test.php, with the PHP the setup script installs."""
 
-    def test_the_php_checks_pass(self):
+    def run_php(self, name):
         php = sorted(PREFIX.glob("root/usr/bin/php8*"))[0]
         env = dict(os.environ, LD_LIBRARY_PATH=str(PREFIX / "root/usr/lib/x86_64-linux-gnu"))
-        r = subprocess.run([str(php), "-n", str(HERE / "php" / "ruling_test.php")],
-                           capture_output=True, text=True, env=env)
+        r = subprocess.run([str(php), "-n", str(HERE / "php" / name)],
+                           capture_output=True, text=True, env=env, stdin=subprocess.DEVNULL)
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
         self.assertIn("0 failed", r.stdout)
+
+    def test_the_php_checks_pass(self):
+        self.run_php("ruling_test.php")
+
+    def test_the_journal_paging_checks_pass(self):
+        self.run_php("journal_test.php")
 
 
 if __name__ == "__main__":

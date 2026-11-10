@@ -90,7 +90,8 @@ class JournalModel extends Base
     {
         $task_id = (int) $task_id;
         $lo = max(0, (int) $lo);
-        $before = (int) $before > 0 ? (int) $before : PHP_INT_MAX;
+        // the column is a 32-bit integer on every driver: PHP_INT_MAX overflows PostgreSQL's
+        $before = (int) $before > 0 ? min((int) $before, Journal::NO_BOUND) : Journal::NO_BOUND;
         $db = $this->db;
         $fetch = function ($below, $n) use ($db, $task_id, $system, $lo) {
             $q = $db->table(self::TABLE)
